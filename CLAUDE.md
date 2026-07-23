@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**P0 — Repo bootstrap** (update this marker at each phase transition)
+**P1 — Vault & records** (update this marker at each phase transition)
 
 ## Ground rules (from tuskd-build-loop.md §0 — apply to every phase)
 
