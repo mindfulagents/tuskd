@@ -83,7 +83,7 @@ trait Transport {
     fn call(&self, agent: &str, tool: &str, args: Value) -> CallResult;
 }
 
-/// Embedded stdio: a fresh `opentusk mcp --agent <id>` process per call —
+/// Embedded stdio: a fresh `tuskd mcp --agent <id>` process per call —
 /// sequential single-user sessions, each owning the vault lock briefly.
 struct StdioTransport {
     vault: PathBuf,
@@ -335,7 +335,7 @@ fn run_loop_steps(vault: &Path, t: &dyn Transport) {
     );
     assert_eq!(status["review_queue_depth"], 0, "step 9: {status}");
 
-    // 10. opentusk graduate → exactly one queue item, type=skill, tag
+    // 10. tuskd graduate → exactly one queue item, type=skill, tag
     //     graduated.
     let out = run_cli(vault, &["graduate"]);
     assert!(out.contains("queued"), "step 10: {out}");
