@@ -44,7 +44,7 @@ struct FileRanking {
     trust_weight: Option<f64>,
 }
 
-/// Written by `opentusk init`.
+/// Written by `tuskd init`.
 pub const DEFAULT_TOML: &str = r#"# opentusk.toml — tuskd configuration
 http_port = 7477
 # uds_path = ".tusk/tuskd.sock"

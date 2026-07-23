@@ -1,4 +1,4 @@
-//! `opentusk start` — the single-owner daemon (spec §2.1): axum `/status` +
+//! `tuskd start` — the single-owner daemon (spec §2.1): axum `/status` +
 //! `/mcp` (streamable HTTP, stateless per POST — D8), UDS server for local
 //! sessions and admin one-shots, graduation timer, clean shutdown.
 

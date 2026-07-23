@@ -28,32 +28,32 @@ export PATH="$PWD/target/release:$PATH"
 
 # 1. Initialize a vault
 mkdir demo-vault && cd demo-vault
-opentusk init
+tuskd init
 
 # 2. Create an agent — the token and MCP configs are printed exactly once
-opentusk agent create hermes-dev \
+tuskd agent create hermes-dev \
   --read project:opentusk,user \
   --write project:opentusk \
   --promote project:opentusk
 
 # 3. Start the daemon (owns index + watcher; serves MCP over HTTP :7477 + UDS)
-opentusk start &
+tuskd start &
 sleep 1
 curl -s http://127.0.0.1:7477/status
 
 # 4. Point any MCP client at it — stdio:
-#      {"command": "opentusk", "args": ["mcp", "--agent", "hermes-dev"]}
+#      {"command": "tuskd", "args": ["mcp", "--agent", "hermes-dev"]}
 #    or streamable HTTP with the printed token:
 #      {"url": "http://127.0.0.1:7477/mcp",
 #       "headers": {"Authorization": "Bearer <token>"}}
 
 # 5. CLI works alongside the daemon (routed through it, never a second writer)
-opentusk status
-opentusk search "env parity" --scope project:opentusk
+tuskd status
+tuskd search "env parity" --scope project:opentusk
 
 # 6. The loop: review queue + graduation of proven procedures into skills
-opentusk graduate
-opentusk review list
+tuskd graduate
+tuskd review list
 
 # Shut down
 kill %1
@@ -76,14 +76,14 @@ kill %1
 ## CLI
 
 ```
-opentusk init | start | status
-opentusk mcp --agent <id>
-opentusk agent create <id> [--read s,s] [--write s,s] [--promote s,s]
-opentusk agent grant <id> <read|write|promote> <scope> | revoke <id> | list
-opentusk index [rebuild] | search "<q>" [--scope --as-of --k]
-opentusk review list | approve <qid> | reject <qid>
-opentusk graduate
-opentusk export <archive.tar.gz> | import <archive>
+tuskd init | start | status
+tuskd mcp --agent <id>
+tuskd agent create <id> [--read s,s] [--write s,s] [--promote s,s]
+tuskd agent grant <id> <read|write|promote> <scope> | revoke <id> | list
+tuskd index [rebuild] | search "<q>" [--scope --as-of --k]
+tuskd review list | approve <qid> | reject <qid>
+tuskd graduate
+tuskd export <archive.tar.gz> | import <archive>
 ```
 
 ## Vault layout

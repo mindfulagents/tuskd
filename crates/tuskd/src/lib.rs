@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! tuskd: the `opentusk` binary — CLI, daemon, transports.
+//! tuskd: the `tuskd` binary — CLI, daemon, transports.
 
 pub mod admin;
 pub mod archive;

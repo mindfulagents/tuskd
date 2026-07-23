@@ -1,4 +1,4 @@
-//! `opentusk mcp --agent <id>` — stdio⇄UDS proxy when a daemon owns the
+//! `tuskd mcp --agent <id>` — stdio⇄UDS proxy when a daemon owns the
 //! vault, embedded core otherwise (spec §2.1). Must exit promptly when stdin
 //! closes (build-loop §3.1).
 

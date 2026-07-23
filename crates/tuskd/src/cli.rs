@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 
-/// opentusk — local, single-binary memory system for AI agent swarms.
+/// tuskd — local, single-binary memory system for AI agent swarms.
 #[derive(Debug, Parser)]
-#[command(name = "opentusk", version, about)]
+#[command(name = "tuskd", version, about)]
 pub struct Cli {
     /// Vault directory (defaults to $OPENTUSK_VAULT or ./vault)
     #[arg(long, global = true)]

@@ -4,14 +4,14 @@ use std::path::Path;
 use std::process::Command;
 
 fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_opentusk"))
+    Command::new(env!("CARGO_BIN_EXE_tuskd"))
 }
 
 fn run_ok(vault: &Path, args: &[&str]) -> String {
     let out = bin().arg("--vault").arg(vault).args(args).output().unwrap();
     assert!(
         out.status.success(),
-        "opentusk {args:?} failed: {}",
+        "tuskd {args:?} failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).to_string()

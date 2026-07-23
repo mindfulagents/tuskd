@@ -1,4 +1,4 @@
-//! `opentusk export | import` — tar.gz of the vault. The index is derived
+//! `tuskd export | import` — tar.gz of the vault. The index is derived
 //! and excluded; import rebuilds it.
 
 use flate2::read::GzDecoder;

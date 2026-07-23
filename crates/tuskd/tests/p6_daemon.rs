@@ -1,5 +1,5 @@
 //! P6 exit tests — daemon, transports, CLI (build-loop §2 P6).
-//! These drive the real `opentusk` binary.
+//! These drive the real `tuskd` binary.
 
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
@@ -7,7 +7,7 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_opentusk"))
+    Command::new(env!("CARGO_BIN_EXE_tuskd"))
 }
 
 /// Run a one-shot CLI command in `vault`, asserting success; returns stdout.
@@ -17,10 +17,10 @@ fn run_ok(vault: &std::path::Path, args: &[&str]) -> String {
         .arg(vault)
         .args(args)
         .output()
-        .expect("spawn opentusk");
+        .expect("spawn tuskd");
     assert!(
         out.status.success(),
-        "opentusk {args:?} failed: {}",
+        "tuskd {args:?} failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).to_string()

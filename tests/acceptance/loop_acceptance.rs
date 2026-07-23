@@ -1,6 +1,6 @@
 //! Acceptance Suite — the 11-step loop from tuskd-build-loop.md §4, run once
 //! over embedded stdio and once over HTTP against a live daemon, driving the
-//! real `opentusk` binary end to end.
+//! real `tuskd` binary end to end.
 
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
@@ -9,14 +9,14 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_opentusk"))
+    Command::new(env!("CARGO_BIN_EXE_tuskd"))
 }
 
 fn run_cli(vault: &Path, args: &[&str]) -> String {
     let out = bin().arg("--vault").arg(vault).args(args).output().unwrap();
     assert!(
         out.status.success(),
-        "opentusk {args:?} failed: {}",
+        "tuskd {args:?} failed: {}",
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).to_string()

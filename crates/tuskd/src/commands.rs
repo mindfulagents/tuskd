@@ -139,7 +139,7 @@ fn init(vault: &std::path::Path) -> Result<(), CoreError> {
     let host = CoreHost::open(&cfg, false)?;
     host.shutdown();
     println!("initialized vault at {}", vault.display());
-    println!("next: opentusk agent create <id>   # then: opentusk start");
+    println!("next: tuskd agent create <id>   # then: tuskd start");
     Ok(())
 }
 
@@ -169,7 +169,7 @@ fn agent_command(vault: &std::path::Path, command: AgentCommand) -> Result<(), C
             println!("private key (shown once, not stored):");
             println!("{}", data["private_key_pem"].as_str().unwrap_or(""));
             println!("MCP config (stdio):");
-            println!("  {{\"command\": \"opentusk\", \"args\": [\"mcp\", \"--agent\", \"{id}\"]}}");
+            println!("  {{\"command\": \"tuskd\", \"args\": [\"mcp\", \"--agent\", \"{id}\"]}}");
             println!("MCP config (streamable HTTP):");
             println!(
                 "  {{\"url\": \"http://127.0.0.1:{}/mcp\", \"headers\": {{\"Authorization\": \"Bearer {token}\"}}}}",

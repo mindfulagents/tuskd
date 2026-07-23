@@ -8,7 +8,7 @@ Build-loop §1 sketches the tree under `opentusk/`. The working repo is `~/Work/
 
 ## D2 — `tests/acceptance/` holds the suite; it runs as a `tuskd` test target
 
-The §4 suite file lives at `tests/acceptance/loop_acceptance.rs` per the build-loop tree, wired into `crates/tuskd` via an explicit `[[test]]` path. That placement is required because `CARGO_BIN_EXE_opentusk` (the built binary the suite drives) is only injected into integration tests of the package that defines the binary. `cargo test -p tuskd --test acceptance` runs the suite; plain `cargo test` includes it.
+The §4 suite file lives at `tests/acceptance/loop_acceptance.rs` per the build-loop tree, wired into `crates/tuskd` via an explicit `[[test]]` path. That placement is required because `CARGO_BIN_EXE_tuskd` (the built binary the suite drives) is only injected into integration tests of the package that defines the binary. `cargo test -p tuskd --test acceptance` runs the suite; plain `cargo test` includes it.
 
 ## D3 — MCP protocol is hand-rolled, not `rmcp`
 
@@ -41,6 +41,10 @@ Both daemon start and embedded open run `index rebuild` (idempotent, spec §3.3)
 ## D11 — memory_write parameter is `content`; reflect type aliases
 
 Tool arg names (not fixed by spec): `memory_write{content, type=episodic, scope=agent:<id>, tags, entities, trust, trigger, version, supersedes}`; `memory_promote{content, type, target_scope, corrects, …}`; `memory_reflect{candidates:[{type, content, scope, …}], target_scope}` where candidate `type` accepts `fact`→semantic, `procedure`→procedural, `correction`→semantic alongside raw record types. `memory_feedback` requires a read grant on the record's scope (the acceptance suite has read-only `claude-code` sending feedback). Graduation provenance is tracked with a `from:<record-id>` tag on the skill candidate so the scanner never re-queues an already-graduated procedure.
+
+## D12 — Binary is named `tuskd` (user-directed, supersedes the spec's `opentusk`)
+
+The spec names the shipped binary `opentusk`; the user directed that it be `tuskd` (2026-07-23). All CLI invocations are now `tuskd <command>`. Everything else keeps the spec's names: the config file is still `.tusk/opentusk.toml`, the vault env var is still `OPENTUSK_VAULT`, tokens are still `tusk_…`, and the vault layout is unchanged.
 
 ## D5 — x86_64-unknown-linux-musl toolchain not installed
 
