@@ -34,11 +34,12 @@ axum = "0.8"
 hyper = "1"
 clap = { version = "4", features = ["derive"] }
 notify = "7"
+fs2 = "0.4"
 tar = "0.4"
 flate2 = "1"
 tempfile = "3"
 proptest = "1"
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking"] }
 
 [profile.release]
 lto = true

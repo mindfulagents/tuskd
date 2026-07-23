@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**P5 — MCP registry (tusk-mcp)** (update this marker at each phase transition)
+**P6 — Binary: daemon, transports, CLI** (update this marker at each phase transition)
 
 ## Ground rules (from tuskd-build-loop.md §0 — apply to every phase)
 

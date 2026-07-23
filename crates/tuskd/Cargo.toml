@@ -24,6 +24,9 @@ clap.workspace = true
 tokio.workspace = true
 axum.workspace = true
 tar.workspace = true
+fs2.workspace = true
+sha2.workspace = true
+hex.workspace = true
 flate2.workspace = true
 
 [dev-dependencies]

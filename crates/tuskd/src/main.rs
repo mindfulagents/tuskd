@@ -5,12 +5,10 @@ use tuskd::cli::Cli;
 
 fn main() {
     let cli = Cli::parse();
-    // Phases P1–P7 fill in command dispatch; the FTS5 boot probe runs before
-    // anything touches a vault.
+    // FTS5 boot probe: fail loudly before touching any vault (spec §2.3).
     if let Err(e) = tusk_core::fts::verify_fts5() {
         eprintln!("fatal: {e}");
         std::process::exit(1);
     }
-    eprintln!("not yet implemented: {:?}", cli.command);
-    std::process::exit(2);
+    std::process::exit(tuskd::commands::run(cli));
 }
