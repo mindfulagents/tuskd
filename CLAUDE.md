@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**P1 — Vault & records** (update this marker at each phase transition)
+**P2 — Indexer** (update this marker at each phase transition)
 
 ## Ground rules (from tuskd-build-loop.md §0 — apply to every phase)
 

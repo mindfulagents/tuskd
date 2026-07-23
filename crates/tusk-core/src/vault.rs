@@ -28,10 +28,11 @@ impl VaultStore {
             let dir = root.join(sub);
             fs::create_dir_all(&dir).map_err(|e| CoreError::io(dir.display().to_string(), e))?;
         }
-        Ok(VaultStore {
-            root: root.to_path_buf(),
-            clock,
-        })
+        // Canonicalize so watcher event paths (which the OS canonicalizes,
+        // e.g. /var -> /private/var on macOS) compare against index paths.
+        let root =
+            fs::canonicalize(root).map_err(|e| CoreError::io(root.display().to_string(), e))?;
+        Ok(VaultStore { root, clock })
     }
 
     pub fn root(&self) -> &Path {
