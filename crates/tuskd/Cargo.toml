@@ -1,0 +1,31 @@
+[package]
+name = "tuskd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "opentusk"
+path = "src/main.rs"
+
+[lib]
+name = "tuskd"
+path = "src/lib.rs"
+
+[dependencies]
+tusk-core.workspace = true
+tusk-mcp.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+toml.workspace = true
+clap.workspace = true
+tokio.workspace = true
+axum.workspace = true
+tar.workspace = true
+flate2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+reqwest.workspace = true

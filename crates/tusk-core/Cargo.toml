@@ -1,0 +1,24 @@
+[package]
+name = "tusk-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+ulid.workspace = true
+rusqlite.workspace = true
+ed25519-dalek.workspace = true
+rand.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+hex.workspace = true
+notify.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+proptest.workspace = true
