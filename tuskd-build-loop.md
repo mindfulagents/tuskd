@@ -17,7 +17,7 @@
 ## 1. Repo bootstrap (P0)
 
 ```
-opentusk/
+tuskd/
 ├── Cargo.toml            # workspace: crates/tusk-core, crates/tusk-mcp, crates/tuskd
 ├── CLAUDE.md             # copy §0 ground rules + "current phase" pointer; keep updated
 ├── DECISIONS.md
@@ -25,7 +25,7 @@ opentusk/
 └── tests/acceptance/     # the §4 suite lives here as integration tests
 ```
 
-**Exit:** workspace compiles; `opentusk --help` prints command list; clippy/fmt clean; FTS5 boot probe passes (open in-memory rusqlite, create fts5 table — this test exists from day one and must never be removed).
+**Exit:** workspace compiles; `tuskd --help` prints command list; clippy/fmt clean; FTS5 boot probe passes (open in-memory rusqlite, create fts5 table — this test exists from day one and must never be removed).
 
 ## 2. Phases
 
@@ -50,7 +50,7 @@ All nine tools per spec §5 against a `TuskContext` + fixed agent id. Every hand
 **Exit tests (in-process, no transport):** per-tool happy path + at least one ACL denial each; `memory_search` wildcard-grant expansion against index-present scopes; `memory_reflect` batch with mixed scopes returns per-candidate actions; `memory_feedback` math (`partial` = +0.5).
 
 ### P6 — Binary: daemon, transports, CLI (tuskd)
-clap commands per spec §7; daemon: tokio + axum serving `/status` (JSON) and `/mcp` (bearer→agent→per-session MCP over streamable HTTP), UDS server for local sessions, watcher started once, graduation timer, advisory lock file; `opentusk mcp --agent`: UDS proxy when daemon alive, embedded core otherwise (still honoring the lock); clean shutdown on SIGTERM/stdin-close (watcher stopped, lock released).
+clap commands per spec §7; daemon: tokio + axum serving `/status` (JSON) and `/mcp` (bearer→agent→per-session MCP over streamable HTTP), UDS server for local sessions, watcher started once, graduation timer, advisory lock file; `tuskd mcp --agent`: UDS proxy when daemon alive, embedded core otherwise (still honoring the lock); clean shutdown on SIGTERM/stdin-close (watcher stopped, lock released).
 **Exit tests:** `/status` 200 with stats; `/mcp` 401 bad token, initialize handshake good token; stdio session against embedded mode completes initialize + one tool call and **exits within 2s of stdin close** (the TS prototype's lingering-child bug — regression-test it); second embedded instance against same vault refuses to start; daemon restart preserves search results.
 
 ### P7 — Polish & release lane
@@ -80,7 +80,7 @@ Integration test, fresh temp vault, two agents:
 7. hermes `memory_promote` correction with `corrects=<fact-id>` → `superseded_existing`.
 8. `memory_search` with `as_of` = timestamp captured between steps 3 and 7 → returns the ORIGINAL fact; same query at now → returns the correction, not the original.
 9. `memory_status` → totals ≥ 4, grants echoed, queue depth correct.
-10. `opentusk graduate` → exactly one review-queue item, `type=skill`, tag `graduated`.
+10. `tuskd graduate` → exactly one review-queue item, `type=skill`, tag `graduated`.
 11. `review approve <qid>` → skill committed AND `skills/project-opentusk/<id>/SKILL.md` exists with `name:` and `description:` frontmatter lines.
 
 Plus: unauthorized HTTP `/mcp` → 401; `index rebuild` then repeat step 5 → identical hit; daemon SIGTERM → exits < 2s, lock released.

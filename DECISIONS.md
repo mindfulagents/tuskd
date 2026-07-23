@@ -42,9 +42,9 @@ Both daemon start and embedded open run `index rebuild` (idempotent, spec §3.3)
 
 Tool arg names (not fixed by spec): `memory_write{content, type=episodic, scope=agent:<id>, tags, entities, trust, trigger, version, supersedes}`; `memory_promote{content, type, target_scope, corrects, …}`; `memory_reflect{candidates:[{type, content, scope, …}], target_scope}` where candidate `type` accepts `fact`→semantic, `procedure`→procedural, `correction`→semantic alongside raw record types. `memory_feedback` requires a read grant on the record's scope (the acceptance suite has read-only `claude-code` sending feedback). Graduation provenance is tracked with a `from:<record-id>` tag on the skill candidate so the scanner never re-queues an already-graduated procedure.
 
-## D12 — Binary is named `tuskd` (user-directed, supersedes the spec's `opentusk`)
+## D12 — Binary is named `tuskd` (user-directed)
 
-The spec names the shipped binary `opentusk`; the user directed that it be `tuskd` (2026-07-23). All CLI invocations are now `tuskd <command>`. Everything else keeps the spec's names: the config file is still `.tusk/opentusk.toml`, the vault env var is still `OPENTUSK_VAULT`, tokens are still `tusk_…`, and the vault layout is unchanged.
+The spec originally named the shipped binary `opentusk`; the user directed that it be `tuskd` (2026-07-23), and both `tuskd-rust-spec.md` and `tuskd-build-loop.md` were updated to match on the user's instruction. All CLI invocations are `tuskd <command>`. Everything else keeps the original names: the config file is still `.tusk/opentusk.toml`, the vault env var is still `OPENTUSK_VAULT`, tokens are still `tusk_…`, and the vault layout is unchanged.
 
 ## D5 — x86_64-unknown-linux-musl toolchain not installed
 

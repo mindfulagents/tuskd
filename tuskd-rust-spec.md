@@ -2,7 +2,7 @@
 
 *The OpenTusk daemon: a local, single-binary memory system for AI agent swarms. Markdown vault, hybrid local search, MCP-native, per-agent keys and grants, and a full intelligence loop (reflect → gate → share → feedback → skill graduation). This spec defines WHAT to build; `tuskd-build-loop.md` defines HOW to build it autonomously.*
 
-**Language:** Rust (stable). **Distribution:** one static-ish binary named `opentusk`. **First target:** `aarch64-apple-darwin` (Apple Silicon). Linux (musl) and Windows follow; no code may assume a platform beyond what `std` + chosen crates abstract.
+**Language:** Rust (stable). **Distribution:** one static-ish binary named `tuskd`. **First target:** `aarch64-apple-darwin` (Apple Silicon). Linux (musl) and Windows follow; no code may assume a platform beyond what `std` + chosen crates abstract.
 
 ---
 
@@ -28,10 +28,10 @@ One install gives a machine complete agent memory:
 Exactly one `tuskd` process owns the vault's SQLite index and file-watcher. All sessions reach the core through it:
 
 ```
-opentusk start                          → daemon: owns index+watcher,
+tuskd start                          → daemon: owns index+watcher,
                                           serves MCP-HTTP :7477, /status,
                                           and a Unix domain socket (UDS)
-opentusk mcp --agent <id>               → thin stdio⇄UDS proxy to the daemon;
+tuskd mcp --agent <id>               → thin stdio⇄UDS proxy to the daemon;
                                           if no daemon is running, runs the core
                                           EMBEDDED in-process (single-user mode)
 ```
@@ -97,7 +97,7 @@ vault/
 
 ### 3.3 Index (derived, always rebuildable)
 
-Tables: `records` (all frontmatter columns + path) and FTS5 `fts(id UNINDEXED, body, entities, tags)`. `opentusk index rebuild` wipes and re-walks the vault; must be idempotent. Ranking = BM25 combined with telemetry: `score = -bm25 + success_rate + 0.3·ln(1+uses) + 0.2·trust` (constants in config).
+Tables: `records` (all frontmatter columns + path) and FTS5 `fts(id UNINDEXED, body, entities, tags)`. `tuskd index rebuild` wipes and re-walks the vault; must be idempotent. Ranking = BM25 combined with telemetry: `score = -bm25 + success_rate + 0.3·ln(1+uses) + 0.2·trust` (constants in config).
 
 ---
 
@@ -133,19 +133,19 @@ Errors: return MCP tool results with `isError`, text `DENIED: <reason>` for ACL,
 3. **Policy:** per-scope `auto | review`; defaults: `org` = review, `project:*` = auto, `type=skill` = **always review**. Review items persist in `queue/review.json` with qid.
 4. Commit path writes record, invalidates superseded, ingests to index. `review approve <qid>` does the same later; approving a skill also **materializes** `skills/<scope>/<id>/SKILL.md` with `name` + `description` (from `trigger`) frontmatter.
 
-**Graduation scanner** (`opentusk graduate`, plus daemon timer, default 24h): valid `procedural` records with `uses ≥ 5 ∧ successes/uses ≥ 0.8` (config `[graduation]`; a distinct-consumers criterion is v1 — record it as a TODO, don't fake it) → wrap body into a skill candidate (tag `graduated`, trigger from first line, provenance footer) → gate (⇒ review queue).
+**Graduation scanner** (`tuskd graduate`, plus daemon timer, default 24h): valid `procedural` records with `uses ≥ 5 ∧ successes/uses ≥ 0.8` (config `[graduation]`; a distinct-consumers criterion is v1 — record it as a TODO, don't fake it) → wrap body into a skill candidate (tag `graduated`, trigger from first line, provenance footer) → gate (⇒ review queue).
 
 ## 7. CLI
 
 ```
-opentusk init | start | status
-opentusk mcp --agent <id>
-opentusk agent create <id> [--read s,s] [--write s,s] [--promote s,s]   # prints token + paste-ready MCP configs ONCE
-opentusk agent grant <id> <read|write|promote> <scope> | revoke <id> | list
-opentusk index [rebuild] | search "<q>" [--scope --as-of --k]
-opentusk review list | approve <qid> | reject <qid>
-opentusk graduate
-opentusk export <archive.tar.gz> | import <archive>
+tuskd init | start | status
+tuskd mcp --agent <id>
+tuskd agent create <id> [--read s,s] [--write s,s] [--promote s,s]   # prints token + paste-ready MCP configs ONCE
+tuskd agent grant <id> <read|write|promote> <scope> | revoke <id> | list
+tuskd index [rebuild] | search "<q>" [--scope --as-of --k]
+tuskd review list | approve <qid> | reject <qid>
+tuskd graduate
+tuskd export <archive.tar.gz> | import <archive>
 ```
 
 Config `opentusk.toml`: vault path, http_port (7477), uds path, `[policies]`, `[graduation]`, `[ranking]`. Env `OPENTUSK_VAULT` overrides vault.
@@ -158,4 +158,4 @@ Config `opentusk.toml`: vault path, http_port (7477), uds path, `[policies]`, `[
 
 ## 9. Acceptance (product-level)
 
-tuskd v0 is done when the **11-step loop acceptance test** in `tuskd-build-loop.md` passes on Apple Silicon via both transports, `opentusk` is a single binary with no runtime deps, a fresh vault survives `index rebuild` + daemon restart with identical search results, and the README quickstart works verbatim.
+tuskd v0 is done when the **11-step loop acceptance test** in `tuskd-build-loop.md` passes on Apple Silicon via both transports, `tuskd` is a single binary with no runtime deps, a fresh vault survives `index rebuild` + daemon restart with identical search results, and the README quickstart works verbatim.
