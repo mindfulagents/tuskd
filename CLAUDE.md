@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**P2 — Indexer** (update this marker at each phase transition)
+**P4 — Gate & loop kernel** (P3 keyring done) (update this marker at each phase transition)
 
 ## Ground rules (from tuskd-build-loop.md §0 — apply to every phase)
 

@@ -247,3 +247,16 @@ pub fn body_hash(body: &str) -> String {
     h.update(body.trim().as_bytes());
     hex::encode(h.finalize())
 }
+
+impl serde::Serialize for RecordType {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for RecordType {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(d)?;
+        RecordType::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}

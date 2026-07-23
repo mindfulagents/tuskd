@@ -79,3 +79,16 @@ impl fmt::Display for Scope {
         }
     }
 }
+
+impl serde::Serialize for Scope {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Scope {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(d)?;
+        Scope::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}

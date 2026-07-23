@@ -6,6 +6,7 @@ pub mod clock;
 pub mod error;
 pub mod frontmatter;
 pub mod fts;
+pub mod gate;
 pub mod index;
 pub mod keyring;
 pub mod record;
