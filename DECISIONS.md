@@ -6,9 +6,9 @@ Running log of spec-compliant choices made where the spec/build-loop left room, 
 
 Build-loop §1 sketches the tree under `opentusk/`. The working repo is `~/Work/tuskd` and already contains the authoritative docs; nesting a second root adds nothing. The workspace `Cargo.toml` lives at the repo root with the exact `crates/` layout from the spec.
 
-## D2 — `tests/acceptance/` is a workspace member crate
+## D2 — `tests/acceptance/` holds the suite; it runs as a `tuskd` test target
 
-Cargo has no root-level free-floating test dirs, so `tests/acceptance` is a member crate (`acceptance`) whose integration tests are the §4 suite. `cargo test -p acceptance` runs the suite; plain `cargo test` includes it.
+The §4 suite file lives at `tests/acceptance/loop_acceptance.rs` per the build-loop tree, wired into `crates/tuskd` via an explicit `[[test]]` path. That placement is required because `CARGO_BIN_EXE_opentusk` (the built binary the suite drives) is only injected into integration tests of the package that defines the binary. `cargo test -p tuskd --test acceptance` runs the suite; plain `cargo test` includes it.
 
 ## D3 — MCP protocol is hand-rolled, not `rmcp`
 

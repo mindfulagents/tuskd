@@ -23,6 +23,8 @@ pub fn export(vault: &Path, archive: &Path) -> Result<(), CoreError> {
     }
     let file =
         File::create(archive).map_err(|e| CoreError::io(archive.display().to_string(), e))?;
+    // If the archive lands inside the vault, never tar it into itself.
+    let archive_abs = std::fs::canonicalize(archive).ok();
     let enc = GzEncoder::new(file, Compression::default());
     let mut tar = tar::Builder::new(enc);
 
@@ -45,6 +47,9 @@ pub fn export(vault: &Path, archive: &Path) -> Result<(), CoreError> {
             if path.is_dir() {
                 stack.push(path);
             } else if path.is_file() {
+                if archive_abs.is_some() && std::fs::canonicalize(&path).ok() == archive_abs {
+                    continue;
+                }
                 tar.append_path_with_name(&path, &rel)
                     .map_err(|e| CoreError::io(path.display().to_string(), e))?;
                 count += 1;

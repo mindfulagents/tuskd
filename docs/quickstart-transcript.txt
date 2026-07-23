@@ -1,0 +1,40 @@
+initialized vault at .
+next: opentusk agent create <id>   # then: opentusk start
+agent created: hermes-dev
+
+token: tusk_0000000000000000REDACTED_DEMO_TOKEN0000000000000000
+
+private key (shown once, not stored):
+(demo private key redacted from transcript — regenerate with `tuskd agent create`)
+
+
+
+
+MCP config (stdio):
+  {"command": "opentusk", "args": ["mcp", "--agent", "hermes-dev"]}
+MCP config (streamable HTTP):
+  {"url": "http://127.0.0.1:7477/mcp", "headers": {"Authorization": "Bearer tusk_0000000000000000REDACTED_DEMO_TOKEN0000000000000000"}}
+
+this token is shown ONCE — store it now.
+{"event":"listening","http":"127.0.0.1:7477","uds":"./.tusk/tuskd.sock","vault":"."}
+{"agents":1,"daemon":true,"index":{"by_scope":[],"by_type":[],"total":0,"valid":0},"review_queue_depth":0,"vault":"/private/tmp/claude-501/-Users-rcaetano-Work-tuskd/abf26bd2-e309-40a4-bc7a-2e2f9b6c9b25/scratchpad/qs/demo-vault","version":"0.1.0"}
+{
+  "agents": 1,
+  "daemon": true,
+  "index": {
+    "by_scope": [],
+    "by_type": [],
+    "total": 0,
+    "valid": 0
+  },
+  "review_queue_depth": 0,
+  "vault": "/private/tmp/claude-501/-Users-rcaetano-Work-tuskd/abf26bd2-e309-40a4-bc7a-2e2f9b6c9b25/scratchpad/qs/demo-vault",
+  "version": "0.1.0"
+}
+{
+  "count": 0,
+  "hits": []
+}
+no candidates met the graduation thresholds
+review queue is empty
+tuskd: shut down cleanly

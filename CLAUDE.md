@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**P6 — Binary: daemon, transports, CLI** (update this marker at each phase transition)
+**DONE — all phases P0–P7 complete; Acceptance Suite green** (see `tests/acceptance/loop_acceptance.rs`) (update this marker at each phase transition)
 
 ## Ground rules (from tuskd-build-loop.md §0 — apply to every phase)
 
