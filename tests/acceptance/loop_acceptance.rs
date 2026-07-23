@@ -405,7 +405,7 @@ fn acceptance_loop_http_daemon() {
     let vault = dir.path();
 
     // Ephemeral port to avoid collisions.
-    let cfg_path = vault.join(".tusk").join("opentusk.toml");
+    let cfg_path = vault.join(".tusk").join("tuskd.toml");
     let cfg = std::fs::read_to_string(&cfg_path).unwrap();
     std::fs::write(&cfg_path, cfg.replace("http_port = 7477", "http_port = 0")).unwrap();
 

@@ -129,7 +129,7 @@ fn init(vault: &std::path::Path) -> Result<(), CoreError> {
         let dir = vault.join(sub);
         std::fs::create_dir_all(&dir).map_err(|e| CoreError::io(dir.display().to_string(), e))?;
     }
-    let cfg_path = vault.join(".tusk").join("opentusk.toml");
+    let cfg_path = config::config_path(vault);
     if !cfg_path.exists() {
         std::fs::write(&cfg_path, config::DEFAULT_TOML)
             .map_err(|e| CoreError::io(cfg_path.display().to_string(), e))?;

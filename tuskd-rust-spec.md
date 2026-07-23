@@ -92,7 +92,7 @@ uses (int), successes (float), last_used?, version?, trigger?
 vault/
 ├── memory/{agent/<id>, project/<id>, user, org}/*.md
 ├── skills/<scope-dashed>/<record-id>/SKILL.md     # materialized, agent-loadable
-└── .tusk/{index.db, keyring/agents.json, queue/review.json, opentusk.toml, lock}
+└── .tusk/{index.db, keyring/agents.json, queue/review.json, tuskd.toml, lock}
 ```
 
 ### 3.3 Index (derived, always rebuildable)
@@ -148,7 +148,7 @@ tuskd graduate
 tuskd export <archive.tar.gz> | import <archive>
 ```
 
-Config `opentusk.toml`: vault path, http_port (7477), uds path, `[policies]`, `[graduation]`, `[ranking]`. Env `OPENTUSK_VAULT` overrides vault.
+Config `tuskd.toml`: vault path, http_port (7477), uds path, `[policies]`, `[graduation]`, `[ranking]`. Env `OPENTUSK_VAULT` overrides vault.
 
 ## 8. Platform & distribution
 

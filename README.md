@@ -92,10 +92,10 @@ tuskd export <archive.tar.gz> | import <archive>
 vault/
 ├── memory/{agent/<id>, project/<id>, user, org}/*.md   # source of truth
 ├── skills/<scope-dashed>/<record-id>/SKILL.md          # materialized skills
-└── .tusk/{index.db, keyring/agents.json, queue/review.json, opentusk.toml, lock}
+└── .tusk/{index.db, keyring/agents.json, queue/review.json, tuskd.toml, lock}
 ```
 
-Configuration lives in `.tusk/opentusk.toml` (HTTP port, per-scope
+Configuration lives in `.tusk/tuskd.toml` (HTTP port, per-scope
 promotion policies, graduation thresholds, ranking weights). `OPENTUSK_VAULT`
 or `--vault` selects the vault.
 

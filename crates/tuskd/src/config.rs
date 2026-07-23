@@ -1,4 +1,4 @@
-//! `opentusk.toml` + vault path resolution (spec §7, DECISIONS D7).
+//! `tuskd.toml` + vault path resolution (spec §7, DECISIONS D7/D13).
 
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -45,7 +45,7 @@ struct FileRanking {
 }
 
 /// Written by `tuskd init`.
-pub const DEFAULT_TOML: &str = r#"# opentusk.toml — tuskd configuration
+pub const DEFAULT_TOML: &str = r#"# tuskd.toml — tuskd configuration
 http_port = 7477
 # uds_path = ".tusk/tuskd.sock"
 
@@ -83,8 +83,23 @@ pub fn resolve_vault(flag: Option<PathBuf>) -> PathBuf {
     PathBuf::from(".")
 }
 
+/// D13: primary config is `.tusk/tuskd.toml`; pre-rename vaults with only
+/// `.tusk/opentusk.toml` keep working via fallback.
+pub fn config_path(vault: &Path) -> PathBuf {
+    let primary = vault.join(".tusk").join("tuskd.toml");
+    if primary.exists() {
+        return primary;
+    }
+    let legacy = vault.join(".tusk").join("opentusk.toml");
+    if legacy.exists() {
+        legacy
+    } else {
+        primary
+    }
+}
+
 pub fn load(vault: &Path) -> Result<Config, CoreError> {
-    let path = vault.join(".tusk").join("opentusk.toml");
+    let path = config_path(vault);
     let file: FileConfig = if path.exists() {
         let raw = std::fs::read_to_string(&path)
             .map_err(|e| CoreError::io(path.display().to_string(), e))?;
@@ -130,4 +145,29 @@ pub fn load(vault: &Path) -> Result<Config, CoreError> {
             trust_weight: file.ranking.trust_weight.unwrap_or(0.2),
         },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_opentusk_toml_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        let tusk = dir.path().join(".tusk");
+        std::fs::create_dir_all(&tusk).unwrap();
+
+        // No config at all: primary path is the default target.
+        assert!(config_path(dir.path()).ends_with(".tusk/tuskd.toml"));
+
+        // Legacy-only vault: opentusk.toml is honored.
+        std::fs::write(tusk.join("opentusk.toml"), "http_port = 1234\n").unwrap();
+        let cfg = load(dir.path()).unwrap();
+        assert_eq!(cfg.http_port, 1234);
+
+        // Both present: tuskd.toml wins.
+        std::fs::write(tusk.join("tuskd.toml"), "http_port = 5678\n").unwrap();
+        let cfg = load(dir.path()).unwrap();
+        assert_eq!(cfg.http_port, 5678);
+    }
 }

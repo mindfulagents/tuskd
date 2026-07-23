@@ -46,6 +46,13 @@ Tool arg names (not fixed by spec): `memory_write{content, type=episodic, scope=
 
 The spec originally named the shipped binary `opentusk`; the user directed that it be `tuskd` (2026-07-23), and both `tuskd-rust-spec.md` and `tuskd-build-loop.md` were updated to match on the user's instruction. All CLI invocations are `tuskd <command>`. Everything else keeps the original names: the config file is still `.tusk/opentusk.toml`, the vault env var is still `OPENTUSK_VAULT`, tokens are still `tusk_…`, and the vault layout is unchanged.
 
+## D13 — Naming split: OpenTusk is the product, tuskd is the daemon
+
+Ratified 2026-07-23 with the user. Consequences:
+- The single binary stays `tuskd` (daemon + its control plane, Consul/Caddy-style); a user-facing `opentusk`/`tusk` CLI is a v1 option via an argv[0]-dispatch symlink — noted, not built.
+- Config file renamed to `.tusk/tuskd.toml` (it configures the daemon). Vaults that only have the legacy `.tusk/opentusk.toml` still load via fallback; `tuskd init` writes `tuskd.toml`.
+- Kept product-scoped: `OPENTUSK_VAULT` env var, `.tusk/` directory, `tusk_…` token prefix, and "OpenTusk" in prose/branding.
+
 ## D5 — x86_64-unknown-linux-musl toolchain not installed
 
 Per build-loop §0: noted, continuing. No platform-specific code outside `tuskd/src/platform.rs`.

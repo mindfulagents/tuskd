@@ -58,7 +58,7 @@ impl Drop for Daemon {
 
 fn start_daemon(vault: &std::path::Path) -> Daemon {
     // Ephemeral port so parallel tests never collide; the banner reports it.
-    let cfg_path = vault.join(".tusk").join("opentusk.toml");
+    let cfg_path = vault.join(".tusk").join("tuskd.toml");
     let cfg = std::fs::read_to_string(&cfg_path).unwrap();
     std::fs::write(&cfg_path, cfg.replace("http_port = 7477", "http_port = 0")).unwrap();
     let mut child = bin()
