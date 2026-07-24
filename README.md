@@ -55,6 +55,10 @@ tuskd search "env parity" --scope project:opentusk
 tuskd graduate
 tuskd review list
 
+# 7. Web dashboard — status, search, memories, review, agents, housekeeping
+tuskd dashboard          # prints the URL (with a one-per-run operator token)
+                         # and opens it; --no-open to just print
+
 # Shut down
 kill %1
 ```
@@ -84,7 +88,24 @@ tuskd index [rebuild] | search "<q>" [--scope --as-of --k]
 tuskd review list | approve <qid> | reject <qid>
 tuskd graduate
 tuskd export <archive.tar.gz> | import <archive>
+tuskd dashboard [--no-open]
 ```
+
+## Web dashboard
+
+While the daemon runs it serves an operator dashboard at `/ui` on the same
+loopback HTTP listener as `/mcp`: overview (index stats, review-queue depth,
+uptime), search with point-in-time `as of` queries, a memories browser
+(filter / inspect / forget), review-queue approve/reject, agent management,
+and housekeeping (index rebuild, graduation scan, vault export download,
+effective config).
+
+Auth is a per-run operator token (`tuskop_…`) minted at daemon start and
+written owner-only to `.tusk/admin-token`; `tuskd dashboard` prints the
+tokenized URL after checking the daemon is alive. The token travels in the
+`Authorization` header (no cookies), agent tokens do not work on `/api/*`,
+and every dashboard action goes through the same admin plane as the CLI —
+the dashboard cannot bypass scopes, gates, or the single-writer rule.
 
 ## Vault layout
 

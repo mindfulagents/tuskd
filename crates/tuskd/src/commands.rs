@@ -117,8 +117,13 @@ fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> 
             }
             Ok(())
         }
+        Command::Dashboard { no_open } => dashboard(vault, no_open),
         Command::Agent { command } => agent_command(vault, command),
-        Command::Export { archive } => crate::archive::export(vault, &archive),
+        Command::Export { archive } => {
+            let count = crate::archive::export(vault, &archive)?;
+            println!("exported {count} files to {}", archive.display());
+            Ok(())
+        }
         Command::Import { archive } => crate::archive::import(vault, &archive),
     }
 }
@@ -140,6 +145,30 @@ fn init(vault: &std::path::Path) -> Result<(), CoreError> {
     host.shutdown();
     println!("initialized vault at {}", vault.display());
     println!("next: tuskd agent create <id>   # then: tuskd start");
+    Ok(())
+}
+
+/// `tuskd dashboard`: resolve the running daemon's dashboard URL from
+/// `.tusk/admin-token` (liveness-checked via the UDS socket).
+fn dashboard(vault: &std::path::Path, no_open: bool) -> Result<(), CoreError> {
+    let cfg = config::load(vault)?;
+    if UnixStream::connect(&cfg.uds_path).is_err() {
+        return Err(CoreError::Other(
+            "no daemon is running for this vault — start one with `tuskd start`".into(),
+        ));
+    }
+    let path = crate::dashboard::token_file_path(vault);
+    let raw =
+        std::fs::read_to_string(&path).map_err(|e| CoreError::io(path.display().to_string(), e))?;
+    let info: Value = serde_json::from_str(&raw)?;
+    let url = info
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| CoreError::Other("admin-token file has no url".into()))?;
+    println!("dashboard: {url}");
+    if !no_open {
+        crate::platform::open_url(url);
+    }
     Ok(())
 }
 

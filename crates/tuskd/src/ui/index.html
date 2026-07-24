@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenTusk — tuskd dashboard</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --ink: #1a1f26; --muted: #5c6570;
+    --border: #e2e6ea; --accent: #0b6bcb; --accent-ink: #ffffff;
+    --good: #1a7f37; --bad: #b42318; --warn: #9a6700;
+    --code-bg: #f0f2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10141a; --surface: #171c24; --ink: #e6e9ed; --muted: #98a2ad;
+      --border: #2a323d; --accent: #58a6ff; --accent-ink: #0b1520;
+      --good: #3fb950; --bad: #f85149; --warn: #d29922;
+      --code-bg: #0d1117;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  .layout { display: flex; min-height: 100vh; }
+  nav {
+    width: 200px; flex: none; padding: 20px 12px; border-right: 1px solid var(--border);
+    background: var(--surface);
+  }
+  nav .brand { font-weight: 700; font-size: 15px; padding: 4px 10px 14px; }
+  nav .brand small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+  nav a.item {
+    display: block; padding: 7px 10px; border-radius: 6px; color: var(--ink); margin: 1px 0;
+  }
+  nav a.item:hover { background: var(--bg); text-decoration: none; }
+  nav a.item.active { background: var(--accent); color: var(--accent-ink); }
+  main { flex: 1; padding: 24px 28px; max-width: 1100px; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  h2 { font-size: 14px; margin: 22px 0 8px; }
+
+  .tiles { display: flex; flex-wrap: wrap; gap: 12px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 18px; min-width: 150px;
+  }
+  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .tile .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 18px; margin-top: 14px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); font-weight: 600; padding: 6px 10px 6px 0;
+  }
+  td { padding: 7px 10px 7px 0; border-top: 1px solid var(--border); vertical-align: top; }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: var(--bg); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .nowrap { white-space: nowrap; }
+
+  .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .badge.good { color: var(--good); border-color: var(--good); }
+  .badge.bad { color: var(--bad); border-color: var(--bad); }
+
+  input, select, button, textarea {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.danger { color: var(--bad); border-color: var(--bad); background: transparent; }
+  button.danger.armed { background: var(--bad); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+  .row label { font-size: 12px; color: var(--muted); }
+
+  pre.body {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .kv { display: grid; grid-template-columns: 140px 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
+
+  #toast {
+    position: fixed; bottom: 18px; right: 18px; max-width: 380px; display: none;
+    background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 8px; font-size: 13px;
+    z-index: 10;
+  }
+  #toast.bad { background: var(--bad); color: #fff; }
+
+  #auth { max-width: 420px; margin: 12vh auto; }
+  .tokenbox {
+    background: var(--code-bg); border: 1px dashed var(--border); border-radius: 6px;
+    padding: 12px; margin-top: 10px; word-break: break-all;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="auth" class="card hidden">
+  <h1>OpenTusk dashboard</h1>
+  <p class="muted">Paste the operator token for this daemon. Get it with
+  <code>tuskd dashboard</code>, or from <code>.tusk/admin-token</code> in the vault.</p>
+  <div class="row">
+    <input id="auth-token" class="mono" style="flex:1" placeholder="tuskop_…" autocomplete="off">
+    <button class="primary" id="auth-go">Connect</button>
+  </div>
+  <p class="muted small" id="auth-err"></p>
+</div>
+
+<div id="app" class="layout hidden">
+  <nav>
+    <div class="brand">OpenTusk<small>tuskd dashboard</small></div>
+    <a class="item" href="#/overview">Overview</a>
+    <a class="item" href="#/search">Search</a>
+    <a class="item" href="#/memories">Memories</a>
+    <a class="item" href="#/review">Review queue</a>
+    <a class="item" href="#/agents">Agents</a>
+    <a class="item" href="#/housekeeping">Housekeeping</a>
+  </nav>
+  <main id="page"></main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+const $ = (sel, el) => (el || document).querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- auth + api ---------- */
+const store = {
+  get token() { return localStorage.getItem("tuskop") || ""; },
+  set token(t) { localStorage.setItem("tuskop", t); },
+};
+// Bootstrap: accept the token from the URL fragment, then scrub it.
+if (location.hash.startsWith("#t=")) {
+  store.token = location.hash.slice(3);
+  history.replaceState(null, "", "#/overview");
+}
+
+function toast(msg, bad) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = bad ? "bad" : "";
+  t.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.style.display = "none"; }, 4000);
+}
+
+function showAuth(err) {
+  $("#app").classList.add("hidden");
+  $("#auth").classList.remove("hidden");
+  $("#auth-err").textContent = err || "";
+}
+function showApp() {
+  $("#auth").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+}
+
+async function apiFetch(path, opts) {
+  const o = opts || {};
+  o.headers = Object.assign({ Authorization: "Bearer " + store.token }, o.headers);
+  const r = await fetch(path, o);
+  if (r.status === 401) { showAuth("Unauthorized — the token is wrong or the daemon restarted."); throw new Error("unauthorized"); }
+  return r;
+}
+async function admin(cmd, params) {
+  const r = await apiFetch("/api/admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(Object.assign({ cmd }, params || {})),
+  });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "admin error");
+  return j.data;
+}
+const getJson = async path => (await apiFetch(path)).json();
+
+/* ---------- rendering helpers ---------- */
+function fmtDate(s) {
+  if (!s) return "—";
+  const d = new Date(s);
+  return isNaN(d) ? s : d.toLocaleString();
+}
+function uptime(secs) {
+  const d = Math.floor(secs / 86400), h = Math.floor(secs % 86400 / 3600),
+        m = Math.floor(secs % 3600 / 60);
+  return (d ? d + "d " : "") + (h ? h + "h " : "") + m + "m";
+}
+function tile(label, value) {
+  return `<div class="tile"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div></div>`;
+}
+// Two-click destructive confirm: first click arms, second fires.
+function armOrFire(btn, fire) {
+  if (btn.classList.contains("armed")) { fire(); return; }
+  const label = btn.textContent;
+  btn.classList.add("armed");
+  btn.textContent = "confirm?";
+  setTimeout(() => { btn.classList.remove("armed"); btn.textContent = label; }, 2500);
+}
+function recordDetailHtml(rec) {
+  const link = id => id ? `<a href="#" data-rec="${esc(id)}">${esc(id)}</a>` : "—";
+  return `
+    <h2 class="mono">${esc(rec.id)}
+      ${rec.invalid_at ? '<span class="badge bad">invalid</span>' : '<span class="badge good">valid</span>'}
+    </h2>
+    <dl class="kv">
+      <dt>type</dt><dd>${esc(rec.type)}</dd>
+      <dt>scope</dt><dd>${esc(rec.scope)}</dd>
+      <dt>author</dt><dd>${esc(rec.author)}</dd>
+      <dt>created</dt><dd>${esc(fmtDate(rec.created_at))}</dd>
+      <dt>valid</dt><dd>${esc(fmtDate(rec.valid_at))} → ${esc(rec.invalid_at ? fmtDate(rec.invalid_at) : "now")}</dd>
+      <dt>supersedes</dt><dd>${link(rec.supersedes)}</dd>
+      <dt>trust</dt><dd>${esc(rec.trust)}</dd>
+      <dt>uses</dt><dd>${esc(rec.uses)} (successes ${esc(rec.successes)}, rate ${esc((rec.success_rate ?? 0).toFixed(2))})</dd>
+      <dt>tags</dt><dd>${esc((rec.tags || []).join(", ") || "—")}</dd>
+      <dt>entities</dt><dd>${esc((rec.entities || []).join(", ") || "—")}</dd>
+      ${rec.trigger ? `<dt>trigger</dt><dd>${esc(rec.trigger)}</dd>` : ""}
+      ${rec.path ? `<dt>path</dt><dd class="mono small">${esc(rec.path)}</dd>` : ""}
+    </dl>
+    <pre class="body">${esc(rec.body ?? "")}</pre>
+    <div class="row">
+      <button class="danger" data-forget="${esc(rec.id)}">Forget this record</button>
+      <span class="muted small">deletes the file and index row — cannot be undone</span>
+    </div>`;
+}
+// Shared: wire record links + forget buttons inside a detail container.
+function wireDetail(container, onChanged) {
+  container.querySelectorAll("[data-rec]").forEach(a => a.onclick = async e => {
+    e.preventDefault();
+    try { openDetail(container, await admin("record_get", { id: a.dataset.rec }), onChanged); }
+    catch (err) { toast(err.message, true); }
+  });
+  container.querySelectorAll("[data-forget]").forEach(btn => btn.onclick = () => armOrFire(btn, async () => {
+    try {
+      await admin("forget", { id: btn.dataset.forget });
+      toast("record forgotten");
+      container.innerHTML = "";
+      if (onChanged) onChanged();
+    } catch (err) { toast(err.message, true); }
+  }));
+}
+function openDetail(container, rec, onChanged) {
+  container.innerHTML = `<div class="card">${recordDetailHtml(rec)}</div>`;
+  wireDetail(container, onChanged);
+  container.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+function hitsTable(hits, withScore) {
+  if (!hits.length) return `<p class="muted">No records.</p>`;
+  return `<table><thead><tr>
+      <th>id</th><th>type</th><th>scope</th><th>author</th>${withScore ? "<th>score</th>" : ""}
+      <th>created</th><th>snippet</th>
+    </tr></thead><tbody>` + hits.map(h => `
+    <tr class="click" data-id="${esc(h.id)}">
+      <td class="mono small nowrap">${esc(h.id.slice(0, 10))}…</td>
+      <td>${esc(h.type)}${h.invalid_at ? ' <span class="badge bad">invalid</span>' : ""}</td>
+      <td class="nowrap">${esc(h.scope)}</td>
+      <td class="nowrap">${esc(h.author)}</td>
+      ${withScore ? `<td class="mono small">${esc(h.score.toFixed(3))}</td>` : ""}
+      <td class="nowrap small muted">${esc(fmtDate(h.created_at))}</td>
+      <td class="small">${esc(h.snippet.slice(0, 140))}</td>
+    </tr>`).join("") + "</tbody></table>";
+}
+function wireHits(page, detailSel, onChanged) {
+  page.querySelectorAll("tr.click").forEach(tr => tr.onclick = async () => {
+    try { openDetail($(detailSel, page), await admin("record_get", { id: tr.dataset.id }), onChanged); }
+    catch (err) { toast(err.message, true); }
+  });
+}
+
+/* ---------- pages ---------- */
+let refreshTimer = null;
+
+async function pageOverview(page) {
+  async function load() {
+    const [meta, status] = await Promise.all([getJson("/api/meta"), admin("status")]);
+    const s = status.index;
+    page.innerHTML = `
+      <h1>Overview</h1>
+      <div class="tiles">
+        ${tile("records", s.total)}
+        ${tile("valid", s.valid)}
+        ${tile("review queue", status.review_queue_depth)}
+        ${tile("agents", status.agents)}
+        ${tile("uptime", uptime(meta.uptime_secs))}
+      </div>
+      <div class="card">
+        <dl class="kv">
+          <dt>version</dt><dd>tuskd ${esc(meta.version)}</dd>
+          <dt>vault</dt><dd class="mono small">${esc(meta.vault)}</dd>
+          <dt>graduation</dt><dd>scanner runs every ${esc(meta.graduation_interval_hours)}h</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">Records by scope</h2>
+        <table><thead><tr><th>scope</th><th>records</th></tr></thead><tbody>
+          ${s.by_scope.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="mono">${esc(n)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">empty vault</td></tr>'}
+        </tbody></table>
+        <h2>Records by type</h2>
+        <table><thead><tr><th>type</th><th>records</th></tr></thead><tbody>
+          ${s.by_type.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="mono">${esc(n)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">empty vault</td></tr>'}
+        </tbody></table>
+      </div>`;
+  }
+  await load();
+  refreshTimer = setInterval(() => load().catch(() => {}), 5000);
+}
+
+async function pageSearch(page) {
+  page.innerHTML = `
+    <h1>Search</h1>
+    <form id="f" class="row">
+      <input id="q" style="flex:1;min-width:220px" placeholder="query…" autofocus>
+      <input id="scopes" style="width:200px" placeholder="scopes (comma-sep)">
+      <label>as of <input id="asof" type="datetime-local"></label>
+      <label>k <input id="k" type="number" value="10" min="1" max="50" style="width:64px"></label>
+      <button class="primary">Search</button>
+    </form>
+    <div id="results"></div>
+    <div id="detail"></div>`;
+  $("#f", page).onsubmit = async e => {
+    e.preventDefault();
+    const params = { query: $("#q", page).value, k: +$("#k", page).value || 10 };
+    const scopes = $("#scopes", page).value.split(",").map(s => s.trim()).filter(Boolean);
+    if (scopes.length) params.scopes = scopes;
+    const asof = $("#asof", page).value;
+    if (asof) params.as_of = new Date(asof).toISOString();
+    try {
+      const data = await admin("search", params);
+      $("#results", page).innerHTML =
+        `<p class="muted small">${data.count} hit(s)${asof ? " as of " + esc(fmtDate(params.as_of)) : ""}</p>`
+        + hitsTable(data.hits, true);
+      $("#detail", page).innerHTML = "";
+      wireHits(page, "#detail");
+    } catch (err) { toast(err.message, true); }
+  };
+}
+
+async function pageMemories(page) {
+  let offset = 0;
+  const limit = 25;
+  page.innerHTML = `
+    <h1>Memories</h1>
+    <div class="row">
+      <select id="scope"><option value="">all scopes</option></select>
+      <select id="kind">
+        <option value="">all types</option>
+        ${["episodic", "semantic", "procedural", "skill", "profile"].map(t => `<option>${t}</option>`).join("")}
+      </select>
+      <label><input type="checkbox" id="invalid"> include invalidated</label>
+      <button id="reload">Refresh</button>
+      <span style="flex:1"></span>
+      <button id="prev" disabled>‹ prev</button>
+      <span id="pageno" class="muted small"></span>
+      <button id="next">next ›</button>
+    </div>
+    <div id="list"></div>
+    <div id="detail"></div>`;
+  try {
+    const status = await admin("status");
+    for (const [scope] of status.index.by_scope) {
+      const opt = document.createElement("option");
+      opt.textContent = scope;
+      $("#scope", page).appendChild(opt);
+    }
+  } catch (err) { /* scope filter stays free-form-less; list still works */ }
+  async function load() {
+    const params = { limit, offset, include_invalid: $("#invalid", page).checked };
+    if ($("#scope", page).value) params.scope = $("#scope", page).value;
+    if ($("#kind", page).value) params.kind = $("#kind", page).value;
+    try {
+      const data = await admin("record_list", params);
+      $("#list", page).innerHTML = hitsTable(data.records, false);
+      $("#pageno", page).textContent = `${offset + 1}–${offset + data.count}`;
+      $("#prev", page).disabled = offset === 0;
+      $("#next", page).disabled = data.count < limit;
+      wireHits(page, "#detail", load);
+    } catch (err) { toast(err.message, true); }
+  }
+  $("#reload", page).onclick = () => { offset = 0; load(); };
+  $("#scope", page).onchange = $("#kind", page).onchange = $("#invalid", page).onchange =
+    () => { offset = 0; load(); };
+  $("#prev", page).onclick = () => { offset = Math.max(0, offset - limit); load(); };
+  $("#next", page).onclick = () => { offset += limit; load(); };
+  await load();
+}
+
+async function pageReview(page) {
+  page.innerHTML = `<h1>Review queue</h1><div id="queue"></div>`;
+  async function load() {
+    try {
+      const items = await admin("review_list");
+      $("#queue", page).innerHTML = items.length ? items.map(item => `
+        <div class="card" data-qid="${esc(item.qid)}">
+          <div class="row" style="margin-top:0">
+            <span class="mono small">${esc(item.qid)}</span>
+            <span class="badge">${esc(item.candidate.kind ?? item.candidate.type ?? "")}</span>
+            <span class="badge">${esc(String(item.candidate.scope))}</span>
+            <span class="muted small">by ${esc(item.author)} at ${esc(fmtDate(item.submitted_at))}</span>
+            <span style="flex:1"></span>
+            <button class="primary" data-approve>Approve</button>
+            <button class="danger" data-reject>Reject</button>
+          </div>
+          <pre class="body" style="margin-bottom:0">${esc(item.candidate.body)}</pre>
+        </div>`).join("") : `<p class="muted">The review queue is empty.</p>`;
+      $("#queue", page).querySelectorAll("[data-approve]").forEach(btn => btn.onclick = async () => {
+        try {
+          const out = await admin("review", { qid: btn.closest("[data-qid]").dataset.qid, approve: true });
+          toast("approved: " + (out.action || "ok") + (out.id ? " → " + out.id : ""));
+          load();
+        } catch (err) { toast(err.message, true); }
+      });
+      $("#queue", page).querySelectorAll("[data-reject]").forEach(btn => btn.onclick = () => armOrFire(btn, async () => {
+        try {
+          await admin("review", { qid: btn.closest("[data-qid]").dataset.qid, approve: false });
+          toast("rejected");
+          load();
+        } catch (err) { toast(err.message, true); }
+      }));
+    } catch (err) { toast(err.message, true); }
+  }
+  await load();
+}
+
+async function pageAgents(page) {
+  page.innerHTML = `
+    <h1>Agents</h1>
+    <div id="list"></div>
+    <div class="card">
+      <h2 style="margin-top:0">Create agent</h2>
+      <form id="create" class="row">
+        <input id="aid" placeholder="agent id" required>
+        <input id="aread" placeholder="read grants (comma-sep)">
+        <input id="awrite" placeholder="write grants">
+        <input id="apromote" placeholder="promote grants">
+        <button class="primary">Create</button>
+      </form>
+      <div id="created" class="hidden">
+        <p class="muted small">Token — shown once, store it now:</p>
+        <div class="tokenbox mono" id="token"></div>
+        <p class="muted small">Private key (shown once, not stored):</p>
+        <pre class="body small" id="privkey"></pre>
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Add grant</h2>
+      <form id="grant" class="row">
+        <input id="gid" placeholder="agent id" required>
+        <select id="gverb"><option>read</option><option>write</option><option>promote</option></select>
+        <input id="gscope" placeholder="scope (org, user, project:x, agent:x, project:*)" required>
+        <button class="primary">Grant</button>
+      </form>
+    </div>`;
+  async function load() {
+    try {
+      const agents = await admin("agent_list");
+      $("#list", page).innerHTML = `<div class="card"><table><thead><tr>
+          <th>id</th><th>read</th><th>write</th><th>promote</th><th>created</th><th></th>
+        </tr></thead><tbody>` + (agents.map(a => `
+        <tr>
+          <td class="mono">${esc(a.id)} ${a.revoked ? '<span class="badge bad">revoked</span>' : ""}</td>
+          <td class="small">${esc(a.grants.read.join(", ") || "—")}</td>
+          <td class="small">${esc(a.grants.write.join(", ") || "—")}</td>
+          <td class="small">${esc(a.grants.promote.join(", ") || "—")}</td>
+          <td class="small muted nowrap">${esc(fmtDate(a.created_at))}</td>
+          <td>${a.revoked ? "" : `<button class="danger" data-revoke="${esc(a.id)}">Revoke</button>`}</td>
+        </tr>`).join("") || '<tr><td colspan="6" class="muted">no agents yet</td></tr>')
+        + "</tbody></table></div>";
+      $("#list", page).querySelectorAll("[data-revoke]").forEach(btn => btn.onclick = () => armOrFire(btn, async () => {
+        try { await admin("agent_revoke", { id: btn.dataset.revoke }); toast("revoked " + btn.dataset.revoke); load(); }
+        catch (err) { toast(err.message, true); }
+      }));
+    } catch (err) { toast(err.message, true); }
+  }
+  const csv = v => v.split(",").map(s => s.trim()).filter(Boolean);
+  $("#create", page).onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const data = await admin("agent_create", {
+        id: $("#aid", page).value.trim(),
+        read: csv($("#aread", page).value),
+        write: csv($("#awrite", page).value),
+        promote: csv($("#apromote", page).value),
+      });
+      $("#created", page).classList.remove("hidden");
+      $("#token", page).textContent = data.token;
+      $("#privkey", page).textContent = data.private_key_pem;
+      toast("agent created: " + data.id);
+      load();
+    } catch (err) { toast(err.message, true); }
+  };
+  $("#grant", page).onsubmit = async e => {
+    e.preventDefault();
+    try {
+      await admin("agent_grant", {
+        id: $("#gid", page).value.trim(),
+        verb: $("#gverb", page).value,
+        scope: $("#gscope", page).value.trim(),
+      });
+      toast("granted");
+      load();
+    } catch (err) { toast(err.message, true); }
+  };
+  await load();
+}
+
+async function pageHousekeeping(page) {
+  page.innerHTML = `
+    <h1>Housekeeping</h1>
+    <div class="card">
+      <div class="row" style="margin:0">
+        <button id="rebuild">Rebuild index</button>
+        <span class="muted small">wipe and re-walk the vault (idempotent)</span>
+      </div>
+      <div class="row">
+        <button id="graduate">Run graduation scan</button>
+        <span class="muted small">queue proven procedures as skill candidates now</span>
+      </div>
+      <div class="row" style="margin-bottom:0">
+        <button id="export">Export vault (.tar.gz)</button>
+        <span class="muted small">files only — the derived index is excluded</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Effective configuration</h2>
+      <pre class="body" id="config">…</pre>
+    </div>`;
+  $("#rebuild", page).onclick = async () => {
+    try { const d = await admin("rebuild"); toast(`reindexed ${d.reindexed} record(s)`); }
+    catch (err) { toast(err.message, true); }
+  };
+  $("#graduate", page).onclick = async () => {
+    try {
+      const d = await admin("graduate");
+      toast(d.length ? `${d.length} candidate(s) queued for review` : "no candidates met the thresholds");
+    } catch (err) { toast(err.message, true); }
+  };
+  $("#export", page).onclick = async () => {
+    try {
+      const r = await apiFetch("/api/export");
+      if (!r.ok) throw new Error("export failed: " + r.status);
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "tuskd-vault-export.tar.gz";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) { toast(err.message, true); }
+  };
+  try { $("#config", page).textContent = JSON.stringify(await getJson("/api/config"), null, 2); }
+  catch (err) { $("#config", page).textContent = "unavailable: " + err.message; }
+}
+
+/* ---------- router ---------- */
+const pages = {
+  overview: pageOverview,
+  search: pageSearch,
+  memories: pageMemories,
+  review: pageReview,
+  agents: pageAgents,
+  housekeeping: pageHousekeeping,
+};
+
+async function route() {
+  const name = (location.hash.replace(/^#\//, "") || "overview").split("?")[0];
+  const render = pages[name] || pageOverview;
+  clearInterval(refreshTimer);
+  refreshTimer = null;
+  document.querySelectorAll("nav a.item").forEach(a =>
+    a.classList.toggle("active", a.getAttribute("href") === "#/" + name));
+  const page = $("#page");
+  page.innerHTML = "";
+  try {
+    await render(page);
+    showApp();
+  } catch (err) {
+    if (err.message !== "unauthorized") {
+      page.innerHTML = `<p class="muted">Failed to load: ${esc(err.message)}</p>`;
+      showApp();
+    }
+  }
+}
+
+$("#auth-go").onclick = () => {
+  store.token = $("#auth-token").value.trim();
+  route();
+};
+$("#auth-token").addEventListener("keydown", e => { if (e.key === "Enter") $("#auth-go").click(); });
+
+window.addEventListener("hashchange", route);
+if (!store.token) showAuth();
+else route();
+</script>
+</body>
+</html>

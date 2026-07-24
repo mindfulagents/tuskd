@@ -57,6 +57,12 @@ pub enum Command {
     },
     /// Run the graduation scanner once
     Graduate,
+    /// Print (and open) the web dashboard URL for the running daemon
+    Dashboard {
+        /// Print the URL only; don't open a browser
+        #[arg(long)]
+        no_open: bool,
+    },
     /// Export the vault to a tar.gz archive
     Export {
         /// Output archive path

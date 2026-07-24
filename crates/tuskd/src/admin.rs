@@ -48,6 +48,24 @@ pub enum AdminRequest {
         id: String,
     },
     AgentList,
+    RecordList {
+        #[serde(default)]
+        scope: Option<String>,
+        #[serde(default)]
+        kind: Option<String>,
+        #[serde(default)]
+        limit: Option<usize>,
+        #[serde(default)]
+        offset: Option<usize>,
+        #[serde(default)]
+        include_invalid: bool,
+    },
+    RecordGet {
+        id: String,
+    },
+    Forget {
+        id: String,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -186,6 +204,46 @@ fn execute_inner(
         AdminRequest::AgentRevoke { id } => {
             ctx.keyring.revoke(id)?;
             Ok(json!({"id": id, "revoked": true}))
+        }
+        AdminRequest::RecordList {
+            scope,
+            kind,
+            limit,
+            offset,
+            include_invalid,
+        } => {
+            let scopes = match scope {
+                Some(raw) => Some(vec![Scope::parse(raw)?]),
+                None => None,
+            };
+            let kind = match kind.as_deref() {
+                Some(raw) => Some(tusk_core::record::RecordType::parse(raw)?),
+                None => None,
+            };
+            // The underlying browse query is capped at 500 rows; page inside it.
+            let limit = limit.unwrap_or(50).clamp(1, 200);
+            let offset = offset.unwrap_or(0).min(500 - 1);
+            let hits = ctx.indexer.search(&SearchQuery {
+                query: String::new(),
+                scopes,
+                kind,
+                include_invalid: *include_invalid,
+                k: (offset + limit).min(500),
+                ..Default::default()
+            })?;
+            let records: Vec<_> = hits.into_iter().skip(offset).collect();
+            Ok(json!({"count": records.len(), "offset": offset, "records": records}))
+        }
+        AdminRequest::RecordGet { id } => {
+            let (path, rec) = ctx.vault.get(id)?;
+            let mut out = tusk_mcp::record_json(&rec);
+            out["path"] = json!(path.display().to_string());
+            Ok(out)
+        }
+        AdminRequest::Forget { id } => {
+            ctx.vault.forget(id)?;
+            ctx.indexer.remove(id)?;
+            Ok(json!({"id": id, "forgotten": true}))
         }
         AdminRequest::AgentList => {
             let agents = ctx.keyring.list()?;

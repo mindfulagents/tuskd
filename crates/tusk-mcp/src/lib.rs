@@ -7,4 +7,4 @@ mod context;
 mod tools;
 
 pub use context::TuskContext;
-pub use tools::{ToolDef, ToolRegistry, ToolResult};
+pub use tools::{record_json, ToolDef, ToolRegistry, ToolResult};

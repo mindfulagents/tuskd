@@ -28,10 +28,15 @@ fs2.workspace = true
 sha2.workspace = true
 hex.workspace = true
 flate2.workspace = true
+rand.workspace = true
 
 [[test]]
 name = "acceptance"
 path = "../../tests/acceptance/loop_acceptance.rs"
+
+[[test]]
+name = "dashboard"
+path = "../../tests/acceptance/dashboard_acceptance.rs"
 
 [dev-dependencies]
 tempfile.workspace = true

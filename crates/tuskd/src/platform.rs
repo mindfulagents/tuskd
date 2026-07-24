@@ -28,6 +28,32 @@ pub struct VaultLock {
     path: PathBuf,
 }
 
+/// Write a file readable only by the owning user (0600 on Unix). Used for
+/// the dashboard operator token.
+pub fn write_private(path: &Path, contents: &str) -> Result<(), CoreError> {
+    std::fs::write(path, contents).map_err(|e| CoreError::io(path.display().to_string(), e))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| CoreError::io(path.display().to_string(), e))?;
+    }
+    Ok(())
+}
+
+/// Best-effort "open in the default browser"; failure is not an error.
+pub fn open_url(url: &str) {
+    #[cfg(target_os = "macos")]
+    let opener = "open";
+    #[cfg(not(target_os = "macos"))]
+    let opener = "xdg-open";
+    let _ = std::process::Command::new(opener)
+        .arg(url)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
 impl VaultLock {
     pub fn acquire(vault: &Path) -> Result<VaultLock, CoreError> {
         let dir = vault.join(".tusk");

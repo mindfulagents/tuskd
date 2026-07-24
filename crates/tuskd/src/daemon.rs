@@ -49,6 +49,15 @@ pub fn run(config: Config) -> Result<(), CoreError> {
             .local_addr()
             .map_err(|e| CoreError::Other(format!("local_addr: {e}")))?;
 
+        // Operator token for the dashboard (D14): minted per daemon run,
+        // written owner-only to .tusk/admin-token before the banner.
+        let operator = crate::dashboard::generate_token();
+        let dashboard_url = crate::dashboard::write_token_file(
+            &config.vault,
+            &actual.to_string(),
+            &operator.token,
+        )?;
+
         // Banner: first stdout line, machine-readable.
         println!(
             "{}",
@@ -57,10 +66,12 @@ pub fn run(config: Config) -> Result<(), CoreError> {
                 "http": actual.to_string(),
                 "uds": config.uds_path.display().to_string(),
                 "vault": config.vault.display().to_string(),
+                "dashboard": dashboard_url,
             })
         );
         use std::io::Write;
         let _ = std::io::stdout().flush();
+        eprintln!("dashboard: {dashboard_url}");
 
         let state = AppState {
             ctx: Arc::clone(&ctx),
@@ -69,7 +80,13 @@ pub fn run(config: Config) -> Result<(), CoreError> {
         let app = Router::new()
             .route("/status", get(http_status))
             .route("/mcp", post(http_mcp))
-            .with_state(state);
+            .with_state(state)
+            .merge(crate::dashboard::routes(crate::dashboard::DashState {
+                ctx: Arc::clone(&ctx),
+                config: Arc::clone(&config),
+                token_sha256: Arc::new(operator.sha256),
+                started: std::time::Instant::now(),
+            }));
 
         // Graduation timer (default 24h).
         {
@@ -115,6 +132,7 @@ pub fn run(config: Config) -> Result<(), CoreError> {
     });
 
     let _ = std::fs::remove_file(&config.uds_path);
+    crate::dashboard::remove_token_file(&config.vault);
     host.shutdown();
     eprintln!("tuskd: shut down cleanly");
     result

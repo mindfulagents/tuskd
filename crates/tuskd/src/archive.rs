@@ -14,7 +14,8 @@ fn skip(rel: &Path) -> bool {
     name.starts_with("index.db") || name == "lock" || name.ends_with(".sock")
 }
 
-pub fn export(vault: &Path, archive: &Path) -> Result<(), CoreError> {
+/// Returns the number of files archived (callers print/report).
+pub fn export(vault: &Path, archive: &Path) -> Result<usize, CoreError> {
     if !vault.join(".tusk").is_dir() {
         return Err(CoreError::Other(format!(
             "{} is not a vault (no .tusk directory)",
@@ -59,8 +60,7 @@ pub fn export(vault: &Path, archive: &Path) -> Result<(), CoreError> {
     tar.into_inner()
         .and_then(|enc| enc.finish())
         .map_err(|e| CoreError::io(archive.display().to_string(), e))?;
-    println!("exported {count} files to {}", archive.display());
-    Ok(())
+    Ok(count)
 }
 
 pub fn import(vault: &Path, archive: &Path) -> Result<(), CoreError> {

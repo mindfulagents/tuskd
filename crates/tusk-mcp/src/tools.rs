@@ -448,7 +448,8 @@ impl ToolRegistry {
     }
 }
 
-fn record_json(rec: &tusk_core::record::Record) -> Value {
+/// Full JSON view of a record (shared with the daemon's admin plane).
+pub fn record_json(rec: &tusk_core::record::Record) -> Value {
     json!({
         "id": rec.id,
         "type": rec.kind.to_string(),

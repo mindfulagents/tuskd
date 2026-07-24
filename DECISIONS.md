@@ -53,6 +53,33 @@ Ratified 2026-07-23 with the user. Consequences:
 - Config file renamed to `.tusk/tuskd.toml` (it configures the daemon). Vaults that only have the legacy `.tusk/opentusk.toml` still load via fallback; `tuskd init` writes `tuskd.toml`.
 - Kept product-scoped: `OPENTUSK_VAULT` env var, `.tusk/` directory, `tusk_…` token prefix, and "OpenTusk" in prose/branding.
 
+## D14 — Web dashboard is an operator plane on the daemon's existing listener
+
+Added post-v0 at the user's request (2026-07-24). Shape:
+
+- `/ui` is a single embedded HTML file (`include_str!`) — no asset pipeline,
+  no Node toolchain; `/api/admin` is a thin bridge that deserializes an
+  `AdminRequest` and calls `admin::execute`, the same plane the CLI and UDS
+  use (D6), so the dashboard can never bypass the gate/keyring or become a
+  second core owner. `/api/meta`, `/api/config`, `/api/export` are the only
+  extra read-only endpoints.
+- Operator auth is separate from agent auth: a per-run `tuskop_…` token is
+  minted at daemon start (only its sha256 stays in memory), written
+  owner-only (0600) to `.tusk/admin-token`, advertised in the startup banner
+  as `dashboard`, and removed on clean shutdown. Bearer-header auth only —
+  no cookies, hence no CSRF surface; the listener stays loopback-bound.
+  Agent tokens are rejected on `/api/*`; the operator token is not valid on
+  `/mcp`.
+- `tuskd dashboard [--no-open]` checks daemon liveness via the UDS socket,
+  then prints/opens the URL from the token file.
+- New admin verbs `record_list` / `record_get` / `forget` back the memories
+  browser; `record_list` pages inside the indexer's existing 500-row browse
+  window rather than growing a new query path.
+- External contracts unchanged: `/mcp`, `/status`, CLI verbs, tool schemas,
+  vault layout, and config keys are untouched (the banner gaining a
+  `dashboard` field and the new `.tusk/admin-token` runtime file are
+  additive; export already skipped non-vault runtime files).
+
 ## D5 — x86_64-unknown-linux-musl toolchain not installed
 
 Per build-loop §0: noted, continuing. No platform-specific code outside `tuskd/src/platform.rs`.
