@@ -1,2 +1,6 @@
 /target
 .DS_Store
+/demo/vault
+/demo/tokens.env
+.env.deploy
+/site/.vercel

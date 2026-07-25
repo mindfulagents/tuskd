@@ -19,12 +19,22 @@ into agent-loadable SKILL.md files.
   review queue; corrections supersede bitemporally (nothing is edited in
   place, and `as_of` queries answer "what did we believe then?").
 
+## Install
+
+```sh
+curl -fsSL https://get.opentusk.ai | sh
+```
+
+Detects the platform, verifies the SHA-256 checksum, installs to
+`~/.local/bin` (override with `TUSKD_INSTALL_DIR`), never sudo. Pin a
+release with `TUSKD_VERSION=v0.1.0`. Docs live at
+[opentusk.ai](https://opentusk.ai); the page source is `site/index.html`.
+
 ## Quickstart
 
 ```sh
-# Build (Rust stable; first target is Apple Silicon)
-cargo build --release
-export PATH="$PWD/target/release:$PATH"
+# (or build from source: cargo build --release; Rust stable, Apple Silicon first)
+export PATH="$HOME/.local/bin:$PATH"
 
 # 1. Initialize a vault
 mkdir demo-vault && cd demo-vault
@@ -130,3 +140,25 @@ The full acceptance suite (the 11-step loop over both embedded stdio and HTTP
 transports) is `cargo test -p tuskd --test acceptance`. Design decisions made
 during the build are logged in `DECISIONS.md`; the authoritative product
 contract is `tuskd-rust-spec.md`.
+
+## Releases & the website
+
+Versioning is SemVer; the single source of truth for the version is
+`[workspace.package] version` in `Cargo.toml`. To cut and ship a release:
+
+```sh
+# 1. bump version in Cargo.toml ([workspace.package])
+# 2. build, test, package, and update the manifest:
+./scripts/release.sh          # writes site/releases/v<V>/… + latest.json
+# 3. publish site + installer + artifacts (needs .env.deploy):
+./scripts/deploy-site.sh
+# 4. commit — release tarballs are committed so deploys are reproducible
+git add -A && git commit -m "release: v<V>"
+```
+
+`site/` is the whole public web presence: `index.html` (opentusk.ai docs
+page), `install.sh` (served at get.opentusk.ai), and `releases/` (immutable
+version dirs + `latest.json`, which the installer and the page's version
+badge both read). Hosting details and the rationale for serving artifacts
+from Vercel static files (vs. GitHub Releases, for now) are in
+`DECISIONS.md` D15.

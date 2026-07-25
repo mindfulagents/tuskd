@@ -83,3 +83,15 @@ Added post-v0 at the user's request (2026-07-24). Shape:
 ## D5 — x86_64-unknown-linux-musl toolchain not installed
 
 Per build-loop §0: noted, continuing. No platform-specific code outside `tuskd/src/platform.rs`.
+
+## D15 — Distribution: opentusk.ai docs site + get.opentusk.ai installer, artifacts on Vercel static (2026-07-25)
+
+The public install channel is `curl -fsSL https://get.opentusk.ai | sh`. Because the repo has no public GitHub remote yet, release artifacts are NOT on GitHub Releases; they are static files committed to git under `site/releases/v<version>/` (~2 MB per release) and served by Vercel. This keeps pinned installs reproducible from any clone and needs no extra infrastructure. When the repo goes public, migrate to cargo-dist + GitHub Releases (install.sh's URL scheme was designed to survive that move — only the base URL logic changes) and add Homebrew/cargo-binstall channels.
+
+Mechanics:
+
+- One Vercel project **opentusk-www** (team `team_27HCpCKKFuFwITyEoF34f9u7`) serves `site/` on three domains: `opentusk.ai` (docs page), `www.opentusk.ai` (308 → apex), `get.opentusk.ai` (`/` is a 307 redirect to `/install.sh` — a *redirect*, not a rewrite, because Vercel's filesystem match (index.html) wins over rewrites).
+- DNS is DNSimple (account 18748): apex A `76.76.21.21`, `www`/`get` CNAME `cname.vercel-dns.com`. The previous Lovable-hosted page (A `185.158.133.1`) was replaced 2026-07-25; its `_lovable` TXT records were left in place. `docs.`/`app.`/`api.` still point at DigitalOcean apps and were not touched.
+- `scripts/release.sh` = quality gate (fmt/clippy/test) → `cargo build --release` → tarball + sha256 → regenerate `site/releases/latest.json`. Version comes from `[workspace.package]` in `Cargo.toml`; releases are immutable (never rewrite an existing `v<version>/` dir).
+- `scripts/deploy-site.sh` = link (via Vercel API, credentials in `.env.deploy`, not committed) + `npx vercel deploy site --prod`.
+- install.sh verifies SHA-256 before installing, defaults to `~/.local/bin`, never sudo; honors `TUSKD_VERSION` and `TUSKD_INSTALL_DIR`.
