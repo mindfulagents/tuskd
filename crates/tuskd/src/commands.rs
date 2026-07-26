@@ -2,7 +2,7 @@
 //! admin endpoint, or run embedded under the vault lock (DECISIONS D6).
 
 use crate::admin::{AdminRequest, AdminResponse};
-use crate::cli::{AgentCommand, Cli, Command, IndexCommand, ReviewCommand};
+use crate::cli::{AgentCommand, Cli, Command, IndexCommand, ReviewCommand, TokenCommand};
 use crate::config;
 use crate::runtime::CoreHost;
 use serde_json::Value;
@@ -128,7 +128,7 @@ fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> 
     }
 }
 
-fn init(vault: &std::path::Path) -> Result<(), CoreError> {
+pub(crate) fn init(vault: &std::path::Path) -> Result<(), CoreError> {
     std::fs::create_dir_all(vault).map_err(|e| CoreError::io(vault.display().to_string(), e))?;
     for sub in ["memory", "skills", ".tusk"] {
         let dir = vault.join(sub);
@@ -190,22 +190,7 @@ fn agent_command(vault: &std::path::Path, command: AgentCommand) -> Result<(), C
                     promote,
                 },
             )?;
-            let token = data["token"].as_str().unwrap_or("");
-            println!("agent created: {id}");
-            println!();
-            println!("token: {token}");
-            println!();
-            println!("private key (shown once, not stored):");
-            println!("{}", data["private_key_pem"].as_str().unwrap_or(""));
-            println!("MCP config (stdio):");
-            println!("  {{\"command\": \"tuskd\", \"args\": [\"mcp\", \"--agent\", \"{id}\"]}}");
-            println!("MCP config (streamable HTTP):");
-            println!(
-                "  {{\"url\": \"http://127.0.0.1:{}/mcp\", \"headers\": {{\"Authorization\": \"Bearer {token}\"}}}}",
-                cfg.http_port
-            );
-            println!();
-            println!("this token is shown ONCE — store it now.");
+            print_created_agent(&cfg, &id, &data);
             Ok(())
         }
         AgentCommand::Grant { id, verb, scope } => {
@@ -223,11 +208,52 @@ fn agent_command(vault: &std::path::Path, command: AgentCommand) -> Result<(), C
             println!("{}", serde_json::to_string_pretty(&data)?);
             Ok(())
         }
+        AgentCommand::Setup {
+            client,
+            agent,
+            http,
+            print,
+            remove,
+            yes,
+        } => crate::setup::run(
+            vault,
+            crate::setup::SetupArgs {
+                client,
+                agent,
+                http,
+                print,
+                remove,
+                yes,
+            },
+        ),
+        AgentCommand::Token { command } => match command {
+            TokenCommand::Rotate { id } => crate::setup::rotate_token(vault, &id),
+        },
     }
 }
 
+/// One-time credentials block shared by `agent create` and `agent setup`.
+pub(crate) fn print_created_agent(cfg: &config::Config, id: &str, data: &Value) {
+    let token = data["token"].as_str().unwrap_or("");
+    println!("agent created: {id}");
+    println!();
+    println!("token: {token}");
+    println!();
+    println!("private key (shown once, not stored):");
+    println!("{}", data["private_key_pem"].as_str().unwrap_or(""));
+    println!("MCP config (stdio):");
+    println!("  {{\"command\": \"tuskd\", \"args\": [\"mcp\", \"--agent\", \"{id}\"]}}");
+    println!("MCP config (streamable HTTP):");
+    println!(
+        "  {{\"url\": \"http://127.0.0.1:{}/mcp\", \"headers\": {{\"Authorization\": \"Bearer {token}\"}}}}",
+        cfg.http_port
+    );
+    println!();
+    println!("this token is shown ONCE — store it now.");
+}
+
 /// Send to the daemon over UDS if one is alive, else run embedded (D6).
-fn admin_route(vault: &std::path::Path, req: &AdminRequest) -> Result<Value, CoreError> {
+pub(crate) fn admin_route(vault: &std::path::Path, req: &AdminRequest) -> Result<Value, CoreError> {
     let cfg = config::load(vault)?;
     if let Ok(stream) = UnixStream::connect(&cfg.uds_path) {
         return admin_over_uds(stream, req);

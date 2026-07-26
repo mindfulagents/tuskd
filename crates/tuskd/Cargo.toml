@@ -20,6 +20,7 @@ serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 toml.workspace = true
+toml_edit.workspace = true
 clap.workspace = true
 tokio.workspace = true
 axum.workspace = true
@@ -37,6 +38,10 @@ path = "../../tests/acceptance/loop_acceptance.rs"
 [[test]]
 name = "dashboard"
 path = "../../tests/acceptance/dashboard_acceptance.rs"
+
+[[test]]
+name = "setup"
+path = "../../tests/acceptance/setup_acceptance.rs"
 
 [dev-dependencies]
 tempfile.workspace = true

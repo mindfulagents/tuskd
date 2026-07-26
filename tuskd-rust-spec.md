@@ -142,6 +142,8 @@ tuskd init | start | status
 tuskd mcp --agent <id>
 tuskd agent create <id> [--read s,s] [--write s,s] [--promote s,s]   # prints token + paste-ready MCP configs ONCE
 tuskd agent grant <id> <read|write|promote> <scope> | revoke <id> | list
+tuskd agent setup <client> [--agent <id>] [--http] [--print] [--remove] [--yes]   # additive, D16
+tuskd agent token rotate <id>                                                    # additive, D16
 tuskd index [rebuild] | search "<q>" [--scope --as-of --k]
 tuskd review list | approve <qid> | reject <qid>
 tuskd graduate

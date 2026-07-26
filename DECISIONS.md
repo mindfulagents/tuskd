@@ -95,3 +95,43 @@ Mechanics:
 - `scripts/release.sh` = quality gate (fmt/clippy/test) → `cargo build --release` → tarball + sha256 → regenerate `site/releases/latest.json`. Version comes from `[workspace.package]` in `Cargo.toml`; releases are immutable (never rewrite an existing `v<version>/` dir).
 - `scripts/deploy-site.sh` = link (via Vercel API, credentials in `.env.deploy`, not committed) + `npx vercel deploy site --prod`.
 - install.sh verifies SHA-256 before installing, defaults to `~/.local/bin`, never sudo; honors `TUSKD_VERSION` and `TUSKD_INSTALL_DIR`.
+
+## D16 — `tuskd agent setup <client>`: one-command client configuration (2026-07-26)
+
+Additive CLI (spec §7 amended): `tuskd agent setup <client>` writes the MCP
+config for a known AI client so the "wire your agent up" step of the quickstart
+is one command. Also adds `tuskd agent token rotate <id>` (agent tokens are
+stored only as sha256, so HTTP setup for an *existing* agent has to mint a
+replacement).
+
+Shape (`tuskd/src/setup.rs`):
+
+- Clients: `claude-code` (`./.mcp.json`, project-scoped), `claude-desktop`
+  (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS,
+  `~/.config/Claude/…` elsewhere — path lives in `platform.rs`), `cursor`
+  (`~/.cursor/mcp.json`), `codex` (`~/.codex/config.toml`, edited via
+  `toml_edit` so comments/formatting survive), `vscode` (`./.vscode/mcp.json`,
+  `servers` key + explicit `type`), plus `print` (generic snippet for anything
+  else) and `list` (status table).
+- **Merge-not-clobber:** only the `opentusk` entry in the client file is ever
+  touched; a timestamped `.bak-<epoch>` is taken before any change; malformed
+  existing files are refused untouched; unchanged content is a no-op (no
+  backup, no write). `--remove` deletes just our entry.
+- **stdio by default** — no token in the config, so re-runs are idempotent.
+  Config uses the absolute tuskd binary path (GUI clients don't inherit shell
+  PATH) and an explicit absolute `--vault` (the client's cwd isn't the vault).
+  `--http` embeds a Bearer token (fresh from create, else rotate) and is
+  refused for stdio-only clients (claude-desktop, codex).
+- Auto-creates the agent (default id = client name) with grants
+  `--read org,project:*  --write project:*`, printing the one-time credentials
+  block exactly as `agent create` does. `--yes` additionally auto-inits a
+  missing vault. `--print` is a pure dry run (no file writes, no agent
+  creation, no rotation).
+- Every successful setup ends by spawning `tuskd mcp --agent <id>` exactly as
+  the client will and driving one MCP initialize — misconfiguration fails at
+  setup time, not first use.
+- Deliberately does NOT shell out to client CLIs (e.g. `claude mcp add`):
+  writing the file is deterministic, testable, and identical across clients.
+
+External contracts unchanged; everything here is additive. Acceptance
+coverage: `tests/acceptance/setup_acceptance.rs`.

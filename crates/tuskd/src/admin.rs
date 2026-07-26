@@ -47,6 +47,9 @@ pub enum AdminRequest {
     AgentRevoke {
         id: String,
     },
+    AgentTokenRotate {
+        id: String,
+    },
     AgentList,
     RecordList {
         #[serde(default)]
@@ -204,6 +207,10 @@ fn execute_inner(
         AdminRequest::AgentRevoke { id } => {
             ctx.keyring.revoke(id)?;
             Ok(json!({"id": id, "revoked": true}))
+        }
+        AdminRequest::AgentTokenRotate { id } => {
+            let token = ctx.keyring.rotate_token(id)?;
+            Ok(json!({"id": id, "token": token}))
         }
         AdminRequest::RecordList {
             scope,

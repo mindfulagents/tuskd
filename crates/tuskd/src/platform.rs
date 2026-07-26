@@ -41,6 +41,19 @@ pub fn write_private(path: &Path, contents: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
+/// Claude Desktop's config file, relative to a home directory. macOS keeps it
+/// under Application Support; elsewhere follow the XDG-ish ~/.config layout.
+pub fn claude_desktop_config_path(home: &Path) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        home.join("Library/Application Support/Claude/claude_desktop_config.json")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        home.join(".config/Claude/claude_desktop_config.json")
+    }
+}
+
 /// Best-effort "open in the default browser"; failure is not an error.
 pub fn open_url(url: &str) {
     #[cfg(target_os = "macos")]

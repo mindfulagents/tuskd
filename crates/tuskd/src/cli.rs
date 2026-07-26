@@ -98,6 +98,37 @@ pub enum AgentCommand {
     Revoke { id: String },
     /// List agents
     List,
+    /// Configure an AI client (Claude Code, Claude Desktop, …) to use this vault
+    Setup {
+        /// claude-code | claude-desktop | cursor | codex | vscode | print | list
+        client: Option<String>,
+        /// Agent identity to configure (default: the client name)
+        #[arg(long)]
+        agent: Option<String>,
+        /// Emit a streamable-HTTP config instead of stdio (rotates the token)
+        #[arg(long)]
+        http: bool,
+        /// Print the config that would be written, without touching any file
+        #[arg(long)]
+        print: bool,
+        /// Remove the opentusk entry from the client's config
+        #[arg(long)]
+        remove: bool,
+        /// Non-interactive: auto-init the vault if it doesn't exist yet
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Token operations
+    Token {
+        #[command(subcommand)]
+        command: TokenCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TokenCommand {
+    /// Mint a replacement bearer token (prints it ONCE; the old token dies)
+    Rotate { id: String },
 }
 
 #[derive(Debug, Subcommand)]

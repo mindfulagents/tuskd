@@ -266,6 +266,29 @@ impl Keyring {
         })
     }
 
+    /// Mint a replacement bearer token for an existing, non-revoked agent.
+    /// The old token stops authenticating immediately; the new one is
+    /// returned once and only its sha256 is stored.
+    pub fn rotate_token(&self, id: &str) -> Result<String, CoreError> {
+        let mut secret = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut secret);
+        let token = format!("tusk_{}", hex::encode(secret));
+        let token_sha256 = hex::encode(Sha256::digest(token.as_bytes()));
+        self.with_state(|state| {
+            let agent = state
+                .agents
+                .iter_mut()
+                .find(|a| a.id == id)
+                .ok_or_else(|| CoreError::NotFound(format!("agent {id}")))?;
+            if agent.revoked {
+                return Err(CoreError::Denied(format!("agent {id} is revoked")));
+            }
+            agent.token_sha256 = token_sha256;
+            self.save(state)
+        })?;
+        Ok(token)
+    }
+
     pub fn revoke(&self, id: &str) -> Result<(), CoreError> {
         self.with_state(|state| {
             let agent = state

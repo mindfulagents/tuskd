@@ -51,7 +51,13 @@ tuskd start &
 sleep 1
 curl -s http://127.0.0.1:7477/status
 
-# 4. Point any MCP client at it — stdio:
+# 4. Wire up your AI client in one command — writes the client's MCP config
+#    (merge-not-clobber, with a backup), creates the agent if needed, and
+#    verifies the handshake. Clients: claude-code, claude-desktop, cursor,
+#    codex, vscode; `tuskd agent setup list` shows status + config paths.
+tuskd agent setup claude-code
+
+#    Any other MCP client — stdio:
 #      {"command": "tuskd", "args": ["mcp", "--agent", "hermes-dev"]}
 #    or streamable HTTP with the printed token:
 #      {"url": "http://127.0.0.1:7477/mcp",
@@ -94,6 +100,10 @@ tuskd init | start | status
 tuskd mcp --agent <id>
 tuskd agent create <id> [--read s,s] [--write s,s] [--promote s,s]
 tuskd agent grant <id> <read|write|promote> <scope> | revoke <id> | list
+tuskd agent setup <client> [--agent <id>] [--http] [--print] [--remove] [--yes]
+                  # client: claude-code | claude-desktop | cursor | codex
+                  #         | vscode | print | list
+tuskd agent token rotate <id>
 tuskd index [rebuild] | search "<q>" [--scope --as-of --k]
 tuskd review list | approve <qid> | reject <qid>
 tuskd graduate

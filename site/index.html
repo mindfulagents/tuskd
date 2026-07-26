@@ -403,10 +403,10 @@ curl -s http://127.0.0.1:7477/status</code></pre>
       <div class="step-num">4</div>
       <div class="step-body">
         <h3>Connect your agents</h3>
-        <p>Point any MCP client at tuskd — stdio or streamable HTTP. See <a href="#agents">Agent setup</a> for Claude Code, Claude Desktop, Cursor, and generic clients.</p>
+        <p>One command writes your client's MCP config, creates the agent identity if needed, and verifies the handshake. Works for Claude Code, Claude Desktop, Cursor, Codex, and VS Code — see <a href="#agents">Agent setup</a> for details and generic clients.</p>
         <div class="codeblock">
-          <div class="bar"><span class="lbl">shell — claude code</span><button class="copy-btn">copy</button></div>
-          <pre><code>claude mcp add tuskd -- tuskd mcp --agent hermes-dev</code></pre>
+          <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
+          <pre><code>tuskd agent setup claude-code</code></pre>
         </div>
       </div>
     </div>
@@ -457,7 +457,17 @@ tuskd graduate</code></pre>
     <p class="section-label">03 · Agent setup</p>
     <h2>Wire up your MCP clients</h2>
     <div class="prose">
-      <p>Each agent identity you create with <code>tuskd agent create</code> prints two paste-ready configs: <strong>stdio</strong> (the client launches <code>tuskd mcp</code>, which proxies to the daemon or runs embedded when none is running) and <strong>streamable HTTP</strong> (bearer-token auth against the local daemon).</p>
+      <p>The fast path is <code>tuskd agent setup &lt;client&gt;</code>: it merges an <code>opentusk</code> entry into the client's existing config (taking a backup first — nothing else in the file is touched), creates the agent identity with sensible default grants if it doesn't exist, and verifies a real MCP handshake before it reports success. Re-running it is a no-op; <code>--remove</code> takes the entry back out.</p>
+    </div>
+
+    <div class="codeblock">
+      <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
+      <pre><code>tuskd agent setup claude-code   <span class="c-com"># also: claude-desktop | cursor | codex | vscode</span>
+tuskd agent setup list          <span class="c-com"># what's configured, and where each config lives</span></code></pre>
+    </div>
+
+    <div class="prose">
+      <p>Under the hood there are two transports: <strong>stdio</strong> (the client launches <code>tuskd mcp</code>, which proxies to the daemon or runs embedded when none is running — no token needed) and <strong>streamable HTTP</strong> (bearer-token auth against the local daemon; <code>--http</code>). The tabs show what gets written — or what to paste manually into any other client.</p>
     </div>
 
     <div class="tabs" data-tabs>
@@ -598,6 +608,8 @@ tuskd agent revoke old-agent</code></pre>
 tuskd mcp --agent &lt;id&gt;
 tuskd agent create &lt;id&gt; [--read s,s] [--write s,s] [--promote s,s]
 tuskd agent grant &lt;id&gt; &lt;read|write|promote&gt; &lt;scope&gt; | revoke &lt;id&gt; | list
+tuskd agent setup &lt;client&gt; [--agent &lt;id&gt;] [--http] [--print] [--remove] [--yes]
+tuskd agent token rotate &lt;id&gt;
 tuskd index [rebuild] | search "&lt;q&gt;" [--scope --as-of --k]
 tuskd review list | approve &lt;qid&gt; | reject &lt;qid&gt;
 tuskd graduate
