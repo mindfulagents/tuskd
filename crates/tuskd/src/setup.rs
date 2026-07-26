@@ -280,6 +280,7 @@ fn ensure_agent(vault: &Path, cfg: &config::Config, id: &str) -> Result<Option<S
             read: split(DEFAULT_READ),
             write: split(DEFAULT_WRITE),
             promote: Vec::new(),
+            show_key: false,
         },
     )?;
     println!("created agent {id} (read: {DEFAULT_READ}; write: {DEFAULT_WRITE})");

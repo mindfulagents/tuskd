@@ -54,6 +54,19 @@ pub fn claude_desktop_config_path(home: &Path) -> PathBuf {
     }
 }
 
+/// Create a directory accessible only by the owning user (0700 on Unix).
+/// Used for the agent private-key store (D17).
+pub fn create_private_dir(dir: &Path) -> Result<(), CoreError> {
+    std::fs::create_dir_all(dir).map_err(|e| CoreError::io(dir.display().to_string(), e))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+            .map_err(|e| CoreError::io(dir.display().to_string(), e))?;
+    }
+    Ok(())
+}
+
 /// Best-effort "open in the default browser"; failure is not an error.
 pub fn open_url(url: &str) {
     #[cfg(target_os = "macos")]

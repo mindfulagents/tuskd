@@ -1,10 +1,10 @@
 {
   "name": "tuskd",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "targets": {
     "aarch64-apple-darwin": {
-      "url": "https://get.opentusk.ai/releases/v0.2.0/tuskd-v0.2.0-aarch64-apple-darwin.tar.gz",
-      "sha256": "79aabb72c5efab20022f7f33e99855d06ef9978a62f1a5305bcac1a8a914a8c6"
+      "url": "https://get.opentusk.ai/releases/v0.3.0/tuskd-v0.3.0-aarch64-apple-darwin.tar.gz",
+      "sha256": "118bdfd9801c2cd485f4d81fc6b6f66878356360c71d754e94a6595972aa4175"
     }
   }
 }

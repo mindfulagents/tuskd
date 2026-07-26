@@ -377,6 +377,9 @@ tuskd init</code></pre>
 
 token: tusk_…   (shown ONCE — store it now)
 
+private signing key stored at: .tusk/keyring/keys/hermes-dev.pem
+  (0600, excluded from export; reserved for signed auth / SEAL / Walrus)
+
 MCP config (stdio):
   {"command": "tuskd", "args": ["mcp", "--agent", "hermes-dev"]}
 MCP config (streamable HTTP):
@@ -610,6 +613,7 @@ tuskd agent create &lt;id&gt; [--read s,s] [--write s,s] [--promote s,s]
 tuskd agent grant &lt;id&gt; &lt;read|write|promote&gt; &lt;scope&gt; | revoke &lt;id&gt; | list
 tuskd agent setup &lt;client&gt; [--agent &lt;id&gt;] [--http] [--print] [--remove] [--yes]
 tuskd agent token rotate &lt;id&gt;
+tuskd agent key path &lt;id&gt;
 tuskd index [rebuild] | search "&lt;q&gt;" [--scope --as-of --k]
 tuskd review list | approve &lt;qid&gt; | reject &lt;qid&gt;
 tuskd graduate

@@ -135,3 +135,43 @@ Shape (`tuskd/src/setup.rs`):
 
 External contracts unchanged; everything here is additive. Acceptance
 coverage: `tests/acceptance/setup_acceptance.rs`.
+
+## D17 — Agent private keys: daemon custody in the vault, export-excluded (2026-07-26)
+
+The ed25519 private key minted at `agent create` was previously printed once
+and discarded — dead weight until signed auth exists, and a guaranteed mass
+re-keying the day it does. The user's roadmap (SEAL for ACL, ownership of
+blobs on Walrus — both Sui, both ed25519-native) makes key custody worth
+deciding now.
+
+Decision: **daemon-side custody**, not `~/.ssh`-style home custody. Agents
+are vault-scoped principals, and the natural v1+ architecture is the daemon
+signing on behalf of authenticated agent sessions (the daemon as ssh-agent);
+home-dir custody would force a vault↔key mapping and break single-owner.
+
+- `agent create` (and therefore `agent setup`) now stores the PEM at
+  `.tusk/keyring/keys/<id>.pem` (file 0600, dir 0700, via `platform.rs`
+  helpers) and prints the *path*, not the key. `--show-key` restores the old
+  print-once-store-nothing behavior for client-side custody (e.g. remote HTTP
+  agents). `tuskd agent key path <id>` prints the stored location.
+- **Export exclusion (the prerequisite):** `archive.rs` skipped only
+  `index.db*`/`lock`/`*.sock`, so stored keys would have been tarred into
+  every `tuskd export` archive. `skip()` now also excludes
+  `.tusk/keyring/keys/**` and `admin-token` (the daemon's per-run operator
+  token, which was exportable while a daemon ran). The same skip applies on
+  import as defense in depth. `agents.json` still travels — public keys and
+  token hashes are the identity roster, not secrets.
+- Key **rotation is deliberately deferred**: once keys own on-chain state
+  (Walrus blobs, SEAL policies), rotation is a migration, not a file swap —
+  inventing local rotation semantics now would prejudge that design.
+  Recovery today remains revoke + re-create.
+- Keys do not travel in archives, so a vault restored from `tuskd export`
+  has agents without stored keys — correct by design; recreate or copy keys
+  out of band.
+
+External contracts: additive CLI (`--show-key`, `agent key path`; spec §7
+amended); `AgentCreate` admin verb gains an optional `show_key` field
+(default false — old callers get the new storing behavior); new runtime
+files under `.tusk/` are additive. Coverage:
+`agent_keys_are_stored_privately_and_never_exported` in
+`tests/acceptance/setup_acceptance.rs`.

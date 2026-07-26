@@ -301,3 +301,60 @@ fn setup_list_shows_all_clients() {
         assert!(stdout.contains(name), "missing {name}:\n{stdout}");
     }
 }
+
+#[test]
+fn agent_keys_are_stored_privately_and_never_exported() {
+    let w = world();
+    run_ok(&w, &["init"]);
+
+    // D17 default: key stored under .tusk/keyring/keys, not printed.
+    let stdout = run_ok(&w, &["agent", "create", "bot"]);
+    assert!(
+        stdout.contains("private signing key stored at:"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("BEGIN PRIVATE KEY"), "{stdout}");
+    let key = w.vault.join(".tusk/keyring/keys/bot.pem");
+    assert!(key.is_file());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let file_mode = std::fs::metadata(&key).unwrap().permissions().mode() & 0o777;
+        let dir_mode = std::fs::metadata(key.parent().unwrap())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(file_mode, 0o600, "key file must be 0600");
+        assert_eq!(dir_mode, 0o700, "keys dir must be 0700");
+    }
+    let path_out = run_ok(&w, &["agent", "key", "path", "bot"]);
+    assert!(
+        path_out.trim().ends_with(".tusk/keyring/keys/bot.pem"),
+        "{path_out}"
+    );
+
+    // --show-key: client-side custody — printed once, nothing stored.
+    let stdout = run_ok(&w, &["agent", "create", "roamer", "--show-key"]);
+    assert!(stdout.contains("BEGIN PRIVATE KEY"), "{stdout}");
+    assert!(!w.vault.join(".tusk/keyring/keys/roamer.pem").exists());
+    let (ok, _, stderr) = run(&w, &["agent", "key", "path", "roamer"]);
+    assert!(!ok);
+    assert!(stderr.contains("no stored key"), "{stderr}");
+
+    // Export must carry the identity roster but never secrets.
+    std::fs::write(w.vault.join(".tusk/admin-token"), "{\"url\":\"x\"}").unwrap();
+    let archive = w.project.join("vault.tar.gz");
+    run_ok(&w, &["export", archive.to_str().unwrap()]);
+    let out = Command::new("tar")
+        .args(["-tzf", archive.to_str().unwrap()])
+        .output()
+        .unwrap();
+    let listing = String::from_utf8_lossy(&out.stdout);
+    assert!(listing.contains("keyring/agents.json"), "{listing}");
+    assert!(!listing.contains(".pem"), "private keys leaked:\n{listing}");
+    assert!(
+        !listing.contains("admin-token"),
+        "operator token leaked:\n{listing}"
+    );
+}

@@ -2,7 +2,9 @@
 //! admin endpoint, or run embedded under the vault lock (DECISIONS D6).
 
 use crate::admin::{AdminRequest, AdminResponse};
-use crate::cli::{AgentCommand, Cli, Command, IndexCommand, ReviewCommand, TokenCommand};
+use crate::cli::{
+    AgentCommand, Cli, Command, IndexCommand, KeyCommand, ReviewCommand, TokenCommand,
+};
 use crate::config;
 use crate::runtime::CoreHost;
 use serde_json::Value;
@@ -179,6 +181,7 @@ fn agent_command(vault: &std::path::Path, command: AgentCommand) -> Result<(), C
             read,
             write,
             promote,
+            show_key,
         } => {
             let cfg = config::load(vault)?;
             let data = admin_route(
@@ -188,6 +191,7 @@ fn agent_command(vault: &std::path::Path, command: AgentCommand) -> Result<(), C
                     read,
                     write,
                     promote,
+                    show_key,
                 },
             )?;
             print_created_agent(&cfg, &id, &data);
@@ -229,6 +233,20 @@ fn agent_command(vault: &std::path::Path, command: AgentCommand) -> Result<(), C
         AgentCommand::Token { command } => match command {
             TokenCommand::Rotate { id } => crate::setup::rotate_token(vault, &id),
         },
+        AgentCommand::Key { command } => match command {
+            KeyCommand::Path { id } => {
+                let path = crate::admin::agent_key_path(vault, &id);
+                if path.is_file() {
+                    println!("{}", path.display());
+                    Ok(())
+                } else {
+                    Err(CoreError::NotFound(format!(
+                        "no stored key for {id} — it was created with --show-key \
+                         (client-side custody) or predates key storage (D17)"
+                    )))
+                }
+            }
+        },
     }
 }
 
@@ -239,8 +257,16 @@ pub(crate) fn print_created_agent(cfg: &config::Config, id: &str, data: &Value) 
     println!();
     println!("token: {token}");
     println!();
-    println!("private key (shown once, not stored):");
-    println!("{}", data["private_key_pem"].as_str().unwrap_or(""));
+    match data["private_key_path"].as_str() {
+        Some(path) => {
+            println!("private signing key stored at: {path}");
+            println!("  (0600, excluded from export; reserved for signed auth / SEAL / Walrus)");
+        }
+        None => {
+            println!("private key (shown once, not stored):");
+            println!("{}", data["private_key_pem"].as_str().unwrap_or(""));
+        }
+    }
     println!("MCP config (stdio):");
     println!("  {{\"command\": \"tuskd\", \"args\": [\"mcp\", \"--agent\", \"{id}\"]}}");
     println!("MCP config (streamable HTTP):");

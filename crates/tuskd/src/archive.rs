@@ -8,10 +8,17 @@ use std::fs::File;
 use std::path::{Component, Path, PathBuf};
 use tusk_core::error::CoreError;
 
-/// Skip derived/runtime files: SQLite index (+WAL/SHM), lock, sockets.
+/// Skip derived/runtime/secret files: SQLite index (+WAL/SHM), lock, sockets,
+/// the daemon's per-run operator token, and agent private signing keys
+/// (D17 — secrets never travel in archives; applies to import too as
+/// defense in depth against hand-crafted archives).
 fn skip(rel: &Path) -> bool {
     let name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    name.starts_with("index.db") || name == "lock" || name.ends_with(".sock")
+    name.starts_with("index.db")
+        || name == "lock"
+        || name.ends_with(".sock")
+        || name == "admin-token"
+        || rel.starts_with(".tusk/keyring/keys")
 }
 
 /// Returns the number of files archived (callers print/report).

@@ -77,7 +77,7 @@ pub enum Command {
 
 #[derive(Debug, Subcommand)]
 pub enum AgentCommand {
-    /// Create an agent (prints token + MCP configs ONCE)
+    /// Create an agent (prints token + MCP configs ONCE; stores the signing key)
     Create {
         id: String,
         #[arg(long, value_delimiter = ',')]
@@ -86,6 +86,10 @@ pub enum AgentCommand {
         write: Vec<String>,
         #[arg(long, value_delimiter = ',')]
         promote: Vec<String>,
+        /// Print the private key ONCE instead of storing it in the vault
+        /// (client-side custody)
+        #[arg(long)]
+        show_key: bool,
     },
     /// Add a grant to an agent
     Grant {
@@ -123,6 +127,17 @@ pub enum AgentCommand {
         #[command(subcommand)]
         command: TokenCommand,
     },
+    /// Signing-key operations
+    Key {
+        #[command(subcommand)]
+        command: KeyCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum KeyCommand {
+    /// Print the path of an agent's stored private signing key
+    Path { id: String },
 }
 
 #[derive(Debug, Subcommand)]

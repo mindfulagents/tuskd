@@ -38,6 +38,10 @@ pub enum AdminRequest {
         write: Vec<String>,
         #[serde(default)]
         promote: Vec<String>,
+        /// D17: return the private key instead of storing it in the vault
+        /// (client-side custody for agents that hold their own key).
+        #[serde(default)]
+        show_key: bool,
     },
     AgentGrant {
         id: String,
@@ -90,6 +94,15 @@ impl AdminResponse {
             ))
         }
     }
+}
+
+/// D17: where an agent's private signing key lives under daemon custody.
+pub fn agent_key_path(vault_root: &std::path::Path, id: &str) -> std::path::PathBuf {
+    vault_root
+        .join(".tusk")
+        .join("keyring")
+        .join("keys")
+        .join(format!("{id}.pem"))
 }
 
 pub fn execute(
@@ -186,6 +199,7 @@ fn execute_inner(
             read,
             write,
             promote,
+            show_key,
         } => {
             fn as_refs(v: &[String]) -> Vec<&str> {
                 v.iter().map(|s| s.as_str()).collect()
@@ -193,10 +207,25 @@ fn execute_inner(
             let created =
                 ctx.keyring
                     .create(id, &as_refs(read), &as_refs(write), &as_refs(promote))?;
+            if *show_key {
+                return Ok(json!({
+                    "id": created.id,
+                    "token": created.token,
+                    "private_key_pem": created.private_key_pem,
+                    "public_key_pem": created.public_key_pem,
+                }));
+            }
+            // D17 default: daemon custody. 0700 dir, 0600 file, excluded
+            // from export — reserved for future signed auth / SEAL / Walrus.
+            let path = agent_key_path(ctx.vault.root(), id);
+            if let Some(dir) = path.parent() {
+                crate::platform::create_private_dir(dir)?;
+            }
+            crate::platform::write_private(&path, &created.private_key_pem)?;
             Ok(json!({
                 "id": created.id,
                 "token": created.token,
-                "private_key_pem": created.private_key_pem,
+                "private_key_path": path.display().to_string(),
                 "public_key_pem": created.public_key_pem,
             }))
         }

@@ -40,7 +40,10 @@ export PATH="$HOME/.local/bin:$PATH"
 mkdir demo-vault && cd demo-vault
 tuskd init
 
-# 2. Create an agent — the token and MCP configs are printed exactly once
+# 2. Create an agent — the token and MCP configs are printed exactly once.
+#    Its ed25519 signing key is stored at .tusk/keyring/keys/<id>.pem
+#    (0600, never exported; reserved for signed auth / SEAL / Walrus —
+#    use --show-key to print it once instead and keep custody yourself)
 tuskd agent create hermes-dev \
   --read project:opentusk,user \
   --write project:opentusk \
@@ -98,12 +101,13 @@ kill %1
 ```
 tuskd init | start | status
 tuskd mcp --agent <id>
-tuskd agent create <id> [--read s,s] [--write s,s] [--promote s,s]
+tuskd agent create <id> [--read s,s] [--write s,s] [--promote s,s] [--show-key]
 tuskd agent grant <id> <read|write|promote> <scope> | revoke <id> | list
 tuskd agent setup <client> [--agent <id>] [--http] [--print] [--remove] [--yes]
                   # client: claude-code | claude-desktop | cursor | codex
                   #         | vscode | print | list
 tuskd agent token rotate <id>
+tuskd agent key path <id>
 tuskd index [rebuild] | search "<q>" [--scope --as-of --k]
 tuskd review list | approve <qid> | reject <qid>
 tuskd graduate

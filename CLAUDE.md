@@ -2,7 +2,9 @@
 
 ## Current phase
 
-**DONE — all phases P0–P10 complete; Acceptance Suite green** (`tests/acceptance/loop_acceptance.rs`; web-dashboard suite `tests/acceptance/dashboard_acceptance.rs`) (update this marker at each phase transition)
+**DONE — all phases P0–P10 complete; Acceptance Suite green** (`tests/acceptance/loop_acceptance.rs`; web-dashboard suite `tests/acceptance/dashboard_acceptance.rs`; agent-setup/key-custody suite `tests/acceptance/setup_acceptance.rs`) (update this marker at each phase transition)
+
+Post-v0 additive CLI (see DECISIONS.md): D16 `tuskd agent setup <client>` + `agent token rotate` (one-command MCP config for claude-code/claude-desktop/cursor/codex/vscode); D17 agent private keys stored at `.tusk/keyring/keys/<id>.pem` (0600, export-excluded, `--show-key` opts out; reserved for signed auth / SEAL / Walrus).
 
 ## Ground rules (from tuskd-build-loop.md §0 — apply to every phase)
 
