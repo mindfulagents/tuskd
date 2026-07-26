@@ -285,12 +285,10 @@
       <span class="ver-badge" id="ver-badge">tuskd v0.4.1</span>
     </div>
     <div class="nav-links" id="nav-links">
-      <a href="#install">Install</a>
+      <a href="#why">Why OpenTusk</a>
       <a href="#quickstart">Quickstart</a>
-      <a href="#agents">Agent setup</a>
-      <a href="#concepts">Concepts</a>
-      <a href="#reference">Reference</a>
       <a href="#faq">FAQ</a>
+      <a href="/docs">Docs</a>
     </div>
   </div>
 </nav>
@@ -311,83 +309,55 @@
       </div>
       <div class="hero-ctas">
         <a class="cta" href="#quickstart">Quickstart, step by step</a>
-        <a class="cta ghost" href="#concepts">How it works</a>
+        <a class="cta ghost" href="/docs">Read the docs</a>
       </div>
     </div>
     <svg class="hero-art" viewBox="0 0 72 54" aria-hidden="true"><use href="#mammoth"/></svg>
   </div>
 </header>
 
-<!-- ═══════════════ INSTALL ═══════════════ -->
-<section id="install">
+<!-- ═══════════════ WHY ═══════════════ -->
+<section id="why">
   <div class="wrap reveal">
-    <p class="section-label">01 · Install</p>
-    <h2>Install tuskd</h2>
+    <p class="section-label">01 · Why OpenTusk</p>
+    <h2>Agents are brilliant for one session — then they forget everything.</h2>
     <div class="prose">
-      <p>tuskd ships as a <strong>single static binary</strong> with no runtime dependencies. The installer detects your platform, downloads the latest release, verifies its SHA-256 checksum, and installs to <code>~/.local/bin</code>. It never asks for sudo.</p>
+      <p>Every session starts cold. Hard-won fixes, user preferences, procedures that finally worked — locked away in transcripts nobody reads again. Run several agents on the same project and it's worse: none of them knows what the others learned.</p>
+      <p><strong>tuskd fixes this at the machine level.</strong> One local daemon gives every agent on the box the same durable, searchable, permissioned memory — and a loop that turns what they experience into knowledge the whole swarm can trust.</p>
     </div>
-
-    <div class="tabs" data-tabs>
-      <div class="tablist" role="tablist">
-        <button class="tab" role="tab" aria-selected="true">installer script</button>
-        <button class="tab" role="tab" aria-selected="false">pin a version</button>
-        <button class="tab" role="tab" aria-selected="false">from source</button>
-        <button class="tab" role="tab" aria-selected="false">verify manually</button>
+    <div class="cards">
+      <div class="card">
+        <p class="tag">YOURS</p>
+        <h3>Plain Markdown on your disk</h3>
+        <p>One file per memory record. Grep it, diff it, put it in git. The search index is derived and rebuildable — the files are the truth.</p>
       </div>
-      <div class="tabpanel active" role="tabpanel">
-        <div class="codeblock">
-          <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-          <pre><code>curl -fsSL https://get.opentusk.ai | sh</code></pre>
-        </div>
-        <p>Options via environment variables: <code>TUSKD_INSTALL_DIR</code> to change the destination, <code>TUSKD_VERSION</code> to pin a release.</p>
+      <div class="card">
+        <p class="tag">PRIVATE</p>
+        <h3>Local by construction</h3>
+        <p>Binds to localhost only and makes no outbound calls. Nothing leaves your machine unless you export it.</p>
       </div>
-      <div class="tabpanel" role="tabpanel">
-        <div class="codeblock">
-          <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-          <pre><code>curl -fsSL https://get.opentusk.ai | TUSKD_VERSION=v0.4.1 sh</code></pre>
-        </div>
-        <p>Every release is immutable and stays available at <code>get.opentusk.ai/releases/&lt;version&gt;/…</code>, so pinned installs are reproducible.</p>
+      <div class="card">
+        <p class="tag">SHARED</p>
+        <h3>One memory, whole swarm</h3>
+        <p>Per-agent identities with explicit read / write / promote grants per scope. Agents share project knowledge without stepping on each other.</p>
       </div>
-      <div class="tabpanel" role="tabpanel">
-        <div class="codeblock">
-          <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-          <pre><code><span class="c-com"># Rust stable toolchain required</span>
-cargo build --release
-install -m 0755 target/release/tuskd ~/.local/bin/</code></pre>
-        </div>
-        <p>Building from source requires access to the repository (not yet public).</p>
+      <div class="card">
+        <p class="tag">TRUSTED</p>
+        <h3>Nothing enters unchecked</h3>
+        <p>Shared scopes sit behind a gate: dedup, contradiction probe, per-scope policy, review queue. No agent silently overwrites what the team knows.</p>
       </div>
-      <div class="tabpanel" role="tabpanel">
-        <div class="codeblock">
-          <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-          <pre><code>V=$(curl -fsSL https://get.opentusk.ai/releases/latest.json | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p')
-curl -fsSLO "https://get.opentusk.ai/releases/v$V/tuskd-v$V-aarch64-apple-darwin.tar.gz"
-curl -fsSLO "https://get.opentusk.ai/releases/v$V/tuskd-v$V-aarch64-apple-darwin.tar.gz.sha256"
-shasum -a 256 -c "tuskd-v$V-aarch64-apple-darwin.tar.gz.sha256"
-tar xzf "tuskd-v$V-aarch64-apple-darwin.tar.gz"</code></pre>
-        </div>
-        <p>Checksums are published next to every artifact. The installer script performs this same verification automatically.</p>
+      <div class="card">
+        <p class="tag">COMPOUNDING</p>
+        <h3>Experience becomes skills</h3>
+        <p>Success and failure telemetry feeds search ranking; procedures that keep working graduate into agent-loadable <code>SKILL.md</code> files.</p>
+      </div>
+      <div class="card">
+        <p class="tag">SIMPLE</p>
+        <h3>One binary, MCP-native</h3>
+        <p>No Docker, no database server, no cloud account. Works with Claude Code, Claude Desktop, Cursor, Codex, VS Code — any MCP client.</p>
       </div>
     </div>
-
-    <h3>Supported platforms</h3>
-    <div class="tbl-wrap">
-      <table>
-        <tr><th>Platform</th><th>Target</th><th>Status</th></tr>
-        <tr><td>macOS (Apple Silicon)</td><td><code>aarch64-apple-darwin</code></td><td class="yes">✓ available</td></tr>
-        <tr><td>Linux x86_64</td><td><code>x86_64-unknown-linux-musl</code> (static)</td><td class="soon">planned</td></tr>
-        <tr><td>Linux arm64</td><td><code>aarch64-unknown-linux-musl</code> (static)</td><td class="soon">planned</td></tr>
-        <tr><td>macOS (Intel) / Windows</td><td>—</td><td class="soon">later</td></tr>
-      </table>
-    </div>
-    <p style="color:var(--faint); font-size:0.88rem; max-width:68ch;">Homebrew and cargo-binstall channels are planned once releases move to a public repository.</p>
-
-    <h3>Upgrading</h3>
-    <div class="codeblock">
-      <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-      <pre><code>curl -fsSL https://get.opentusk.ai | sh && tuskd restart -d</code></pre>
-    </div>
-    <p style="color:var(--faint); font-size:0.88rem; max-width:68ch;">The installer replaces the binary in place; <code>tuskd restart -d</code> cycles the daemon onto it gracefully. Releases are immutable, so you can always pin back to a previous version.</p>
+    <p style="margin-top:28px; color:var(--muted);">Want the full picture — architecture, memory model, the gate? <a href="/docs">Read the docs →</a></p>
   </div>
 </section>
 
@@ -397,14 +367,14 @@ tar xzf "tuskd-v$V-aarch64-apple-darwin.tar.gz"</code></pre>
     <p class="section-label">02 · Quickstart</p>
     <h2>From zero to remembering in about a minute</h2>
     <div class="prose">
-      <p>The fast path is four commands: install, make a vault, start the daemon, connect your client. Explicit identities and grants, the review loop, and the dashboard live under <a href="#take-control">Take control</a> below.</p>
+      <p>The fast path is four commands: install, make a vault, start the daemon, connect your client. Explicit identities and grants, the review loop, and the dashboard are covered in <a href="/docs">the docs</a>.</p>
     </div>
 
     <div class="step">
       <div class="step-num">1</div>
       <div class="step-body">
         <h3>Install tuskd</h3>
-        <p>One command — verifies the SHA-256 checksum, installs to <code>~/.local/bin</code>, never asks for sudo. Alternatives (pinning, manual verification, source) are in <a href="#install">Install</a>.</p>
+        <p>One command — verifies the SHA-256 checksum, installs to <code>~/.local/bin</code>, never asks for sudo. Alternatives (pinning, manual verification, source) are in <a href="/docs#install">the docs</a>.</p>
         <div class="codeblock">
           <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
           <pre><code>curl -fsSL https://get.opentusk.ai | sh</code></pre>
@@ -442,7 +412,7 @@ curl -s http://127.0.0.1:7477/status</code></pre>
       <div class="step-num">4</div>
       <div class="step-body">
         <h3>Connect your agents</h3>
-        <p>One command writes your client's MCP config, creates the agent identity if needed, and verifies the handshake. Works for Claude Code, Claude Desktop, Cursor, Codex, and VS Code — see <a href="#agents">Agent setup</a> for details and generic clients.</p>
+        <p>One command writes your client's MCP config, creates the agent identity if needed, and verifies the handshake. Works for Claude Code, Claude Desktop, Cursor, Codex, and VS Code — see <a href="/docs#clients">MCP clients</a> for details and generic clients.</p>
         <div class="codeblock">
           <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
           <pre><code>tuskd agent setup claude-code</code></pre>
@@ -463,238 +433,31 @@ tuskd search "env parity" --scope project:demo</code></pre>
       </div>
     </div>
 
-    <h3 id="take-control" style="margin-top:56px">Take control</h3>
-    <div class="prose">
-      <p><code>agent setup</code> creates identities with sensible default grants. When you want the grants to be a deliberate decision — worker agents that can only <em>propose</em> shared knowledge, read-only observers — create agents explicitly:</p>
-    </div>
-    <div class="codeblock">
-      <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-      <pre><code>tuskd agent create hermes-dev \
-  --read project:demo,user \
-  --write project:demo \
-  --promote project:demo</code></pre>
-    </div>
-    <div class="codeblock">
-      <div class="bar"><span class="lbl">output</span></div>
-      <pre><code class="c-out">agent created: hermes-dev
-
-token: tusk_…   (shown ONCE — store it now)
-
-private signing key stored at: .tusk/keyring/keys/hermes-dev.pem
-  (0600, excluded from export; reserved for signed auth / SEAL / Walrus)
-
-MCP config (stdio):
-  {"command": "tuskd", "args": ["mcp", "--agent", "hermes-dev"]}
-MCP config (streamable HTTP):
-  {"url": "http://127.0.0.1:7477/mcp",
-   "headers": {"Authorization": "Bearer tusk_…"}}</code></pre>
-    </div>
-    <div class="prose">
-      <p>The token and paste-ready MCP configs are printed <strong>exactly once</strong>. Grants are per-scope and explicit — see <a href="#agents">Agent setup</a> for the model.</p>
-    </div>
-
-    <h3>Run the loop</h3>
-    <div class="prose">
-      <p>Contested writes land in a review queue; procedures that keep succeeding graduate into agent-loadable <code>SKILL.md</code> files.</p>
-    </div>
-    <div class="codeblock">
-      <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-      <pre><code>tuskd review list
-tuskd graduate</code></pre>
-    </div>
-
-    <h3>Open the dashboard</h3>
-    <div class="prose">
-      <p>Status, search, memories, the review queue, agents, and housekeeping — in your browser, authenticated with a one-per-run operator token.</p>
-    </div>
-    <div class="codeblock">
-      <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-      <pre><code>tuskd dashboard</code></pre>
-    </div>
+    <div class="note" style="margin-top:44px"><strong>From here:</strong> explicit per-scope grants, the review queue, skill graduation, and the dashboard are all in <a href="/docs">the docs</a> — along with the full CLI and MCP tool reference.</div>
   </div>
 </section>
 
-<!-- ═══════════════ AGENT SETUP ═══════════════ -->
-<section id="agents">
+<!-- ═══════════════ ESSENTIALS ═══════════════ -->
+<section id="essentials">
   <div class="wrap reveal">
-    <p class="section-label">03 · Agent setup</p>
-    <h2>Wire up your MCP clients</h2>
-    <div class="prose">
-      <p>The fast path is <code>tuskd agent setup &lt;client&gt;</code>: it merges an <code>opentusk</code> entry into the client's existing config (taking a backup first — nothing else in the file is touched), creates the agent identity with sensible default grants if it doesn't exist, and verifies a real MCP handshake before it reports success. Re-running it is a no-op; <code>--remove</code> takes the entry back out.</p>
-    </div>
-
-    <div class="codeblock">
-      <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-      <pre><code>tuskd agent setup claude-code   <span class="c-com"># also: claude-desktop | cursor | codex | vscode</span>
-tuskd agent setup list          <span class="c-com"># what's configured, and where each config lives</span></code></pre>
-    </div>
-
-    <div class="prose">
-      <p>Under the hood there are two transports: <strong>stdio</strong> (the client launches <code>tuskd mcp</code>, which proxies to the daemon or runs embedded when none is running — no token needed) and <strong>streamable HTTP</strong> (bearer-token auth against the local daemon; <code>--http</code>). The tabs show what gets written — or what to paste manually into any other client.</p>
-    </div>
-
-    <div class="tabs" data-tabs>
-      <div class="tablist" role="tablist">
-        <button class="tab" role="tab" aria-selected="true">Claude Code</button>
-        <button class="tab" role="tab" aria-selected="false">Claude Desktop</button>
-        <button class="tab" role="tab" aria-selected="false">Cursor</button>
-        <button class="tab" role="tab" aria-selected="false">any client (HTTP)</button>
-      </div>
-      <div class="tabpanel active" role="tabpanel">
-        <div class="codeblock">
-          <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-          <pre><code><span class="c-com"># current project only</span>
-claude mcp add tuskd -- tuskd mcp --agent hermes-dev
-
-<span class="c-com"># or shared via .mcp.json in the repo</span>
-claude mcp add --scope project tuskd -- tuskd mcp --agent hermes-dev</code></pre>
-        </div>
-        <p>stdio needs no token — identity comes from <code>--agent</code>, and the session proxies to the running daemon over its Unix socket.</p>
-      </div>
-      <div class="tabpanel" role="tabpanel">
-        <div class="codeblock">
-          <div class="bar"><span class="lbl">claude_desktop_config.json</span><button class="copy-btn">copy</button></div>
-          <pre><code>{
-  "mcpServers": {
-    "tuskd": {
-      "command": "tuskd",
-      "args": ["mcp", "--agent", "hermes-dev"]
-    }
-  }
-}</code></pre>
-        </div>
-      </div>
-      <div class="tabpanel" role="tabpanel">
-        <div class="codeblock">
-          <div class="bar"><span class="lbl">.cursor/mcp.json</span><button class="copy-btn">copy</button></div>
-          <pre><code>{
-  "mcpServers": {
-    "tuskd": {
-      "command": "tuskd",
-      "args": ["mcp", "--agent", "hermes-dev"]
-    }
-  }
-}</code></pre>
-        </div>
-      </div>
-      <div class="tabpanel" role="tabpanel">
-        <div class="codeblock">
-          <div class="bar"><span class="lbl">mcp config</span><button class="copy-btn">copy</button></div>
-          <pre><code>{
-  "url": "http://127.0.0.1:7477/mcp",
-  "headers": { "Authorization": "Bearer tusk_…your token…" }
-}</code></pre>
-        </div>
-        <p>The bearer token is printed once at <code>tuskd agent create</code>. Every request is authenticated; the endpoint is a single stateless <code>POST /mcp</code>.</p>
-      </div>
-    </div>
-
-    <h3>Scopes and grants</h3>
-    <div class="prose">
-      <p>Every memory record lives in exactly one <strong>scope</strong>, and every tool call passes one ACL choke-point:</p>
-      <ul>
-        <li><code>agent:&lt;id&gt;</code> — the agent's private scope. Always writable by its owner.</li>
-        <li><code>project:&lt;name&gt;</code> — shared team knowledge for one project.</li>
-        <li><code>user</code> — knowledge about the human the agents work for.</li>
-      </ul>
-      <p>Grants are explicit and per-scope: <strong>read</strong> (search &amp; fetch), <strong>write</strong> (direct writes), <strong>promote</strong> (submit candidates through the gate into shared scopes).</p>
-    </div>
-    <div class="codeblock">
-      <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-      <pre><code>tuskd agent grant hermes-dev read project:other
-tuskd agent list
-tuskd agent revoke old-agent</code></pre>
-    </div>
-    <div class="note"><strong>A useful pattern:</strong> give worker agents <code>write</code> only on their own scope and <code>promote</code> on the project scope — so everything shared has passed the gate — and give read-only observers (dashboards, review bots) just <code>read</code>.</div>
-  </div>
-</section>
-
-<!-- ═══════════════ CONCEPTS ═══════════════ -->
-<section id="concepts">
-  <div class="wrap reveal">
-    <p class="section-label">04 · Concepts</p>
-    <h2>How tuskd thinks about memory</h2>
-    <div class="prose">
-      <p>One machine, one daemon, one writer. A single <code>tuskd</code> process owns the SQLite index and the file-watcher; stdio sessions proxy to it over a Unix socket, and the CLI routes through it too. If no daemon is running, commands run the core embedded under the same advisory lock — so there is never a second writer.</p>
-    </div>
+    <p class="section-label">03 · The essentials</p>
+    <h2>Good to know</h2>
     <div class="cards">
       <div class="card">
-        <p class="tag">VAULT</p>
-        <h3>Files are the truth</h3>
-        <p>One Markdown file per memory record, with strict frontmatter. Grep it, diff it, back it up. The SQLite index is derived and rebuildable at any time with <code>tuskd index rebuild</code>.</p>
+        <p class="tag">PLATFORMS</p>
+        <h3>Apple Silicon today</h3>
+        <p><code>aarch64-apple-darwin</code> now; static Linux builds (x86_64, arm64) planned, Intel macOS and Windows later. Installs verify SHA-256, never ask for sudo. <a href="/docs#install">Install options →</a></p>
       </div>
       <div class="card">
-        <p class="tag">THE GATE</p>
-        <h3>Nothing enters shared memory unchecked</h3>
-        <p>Every promotion runs dedup → contradiction probe → per-scope policy → commit, or lands in the review queue. Agents can't silently overwrite what the team knows.</p>
+        <p class="tag">UPGRADES</p>
+        <h3>One line</h3>
+        <p>Re-run the installer, cycle the daemon: <code>curl -fsSL https://get.opentusk.ai | sh && tuskd restart -d</code>. Releases are immutable — you can always pin a version.</p>
       </div>
       <div class="card">
-        <p class="tag">GRADUATION</p>
-        <h3>Experience becomes skills</h3>
-        <p>Success/failure telemetry feeds ranking. Procedures that keep working graduate into agent-loadable <code>SKILL.md</code> files — proven knowledge, packaged for reuse.</p>
+        <p class="tag">SECURITY</p>
+        <h3>Scoped, tokened, auditable</h3>
+        <p>Every tool call is authenticated and passes one ACL choke-point. Agent keys live in the vault (0600) and are excluded from exports. <a href="/docs#agents">The grant model →</a></p>
       </div>
-      <div class="card">
-        <p class="tag">BITEMPORAL</p>
-        <h3>Nothing is edited in place</h3>
-        <p>Corrections supersede; history stays. <code>as_of</code> queries answer "what did we believe then?" — essential when yesterday's run acted on yesterday's beliefs.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ REFERENCE ═══════════════ -->
-<section id="reference">
-  <div class="wrap reveal">
-    <p class="section-label">05 · Reference</p>
-    <h2>Tools, commands, configuration</h2>
-
-    <h3>MCP tools</h3>
-    <div class="tbl-wrap">
-      <table>
-        <tr><th>Tool</th><th>What it does</th></tr>
-        <tr><td><code>memory_write</code></td><td>Write a record to your own or a write-granted scope (default <code>agent:&lt;id&gt;</code>); supports <code>supersedes</code>.</td></tr>
-        <tr><td><code>memory_search</code></td><td>Hybrid search over entitled scopes; <code>scopes</code>, <code>type</code>, <code>tags</code>, <code>as_of</code>, <code>k ≤ 50</code>.</td></tr>
-        <tr><td><code>memory_get</code></td><td>Fetch by id (read grant enforced).</td></tr>
-        <tr><td><code>memory_promote</code></td><td>Submit a candidate through the gate into <code>target_scope</code>; supports <code>corrects</code>.</td></tr>
-        <tr><td><code>memory_reflect</code></td><td>Batch of typed candidates (facts / procedures / corrections), each individually gated — the primary loop entry point.</td></tr>
-        <tr><td><code>memory_feedback</code></td><td><code>success</code> / <code>failure</code> / <code>partial</code> telemetry; feeds ranking and graduation.</td></tr>
-        <tr><td><code>memory_forget</code></td><td>Hard delete (author or own-scope only).</td></tr>
-        <tr><td><code>skill_list</code></td><td>Skills across entitled scopes with trigger + telemetry.</td></tr>
-        <tr><td><code>memory_status</code></td><td>Your grants, index stats, review-queue depth.</td></tr>
-      </table>
-    </div>
-
-    <h3>CLI</h3>
-    <div class="codeblock">
-      <div class="bar"><span class="lbl">tuskd --help</span><button class="copy-btn">copy</button></div>
-      <pre><code>tuskd init | start [-d] | stop | restart [-d] | status
-tuskd mcp --agent &lt;id&gt;
-tuskd agent create &lt;id&gt; [--read s,s] [--write s,s] [--promote s,s]
-tuskd agent grant &lt;id&gt; &lt;read|write|promote&gt; &lt;scope&gt; | revoke &lt;id&gt; | list
-tuskd agent setup &lt;client&gt; [--agent &lt;id&gt;] [--http] [--print] [--remove] [--yes]
-tuskd agent token rotate &lt;id&gt;
-tuskd agent key path &lt;id&gt;
-tuskd index [rebuild] | search "&lt;q&gt;" [--scope --as-of --k]
-tuskd review list | approve &lt;qid&gt; | reject &lt;qid&gt;
-tuskd graduate
-tuskd export &lt;archive.tar.gz&gt; | import &lt;archive&gt;
-tuskd dashboard [--no-open]</code></pre>
-    </div>
-
-    <h3>Configuration</h3>
-    <div class="prose">
-      <p>Config lives at <code>.tusk/tuskd.toml</code> inside the vault. Vault resolution order: <code>--vault</code> flag → <code>$OPENTUSK_VAULT</code> → current directory.</p>
-    </div>
-    <div class="tbl-wrap">
-      <table>
-        <tr><th>Setting</th><th>Default</th><th>Meaning</th></tr>
-        <tr><td><code>http_port</code></td><td><code>7477</code></td><td>Local MCP + dashboard HTTP port (binds 127.0.0.1 only).</td></tr>
-        <tr><td><code>uds</code></td><td><code>.tusk/tuskd.sock</code></td><td>Unix socket for stdio proxying and CLI routing.</td></tr>
-        <tr><td><code>[policies]</code></td><td>—</td><td>Per-scope gate policy (auto-commit vs. review).</td></tr>
-        <tr><td><code>[graduation]</code></td><td>—</td><td>Thresholds for promoting procedures to skills.</td></tr>
-        <tr><td><code>[ranking]</code></td><td>—</td><td>Weights for hybrid search ranking.</td></tr>
-        <tr><td><code>$OPENTUSK_VAULT</code></td><td>—</td><td>Environment override for the vault path.</td></tr>
-      </table>
     </div>
   </div>
 </section>
@@ -702,7 +465,7 @@ tuskd dashboard [--no-open]</code></pre>
 <!-- ═══════════════ FAQ ═══════════════ -->
 <section id="faq">
   <div class="wrap reveal">
-    <p class="section-label">06 · FAQ</p>
+    <p class="section-label">04 · FAQ</p>
     <h2>Questions you'll have</h2>
 
     <details>
@@ -710,16 +473,8 @@ tuskd dashboard [--no-open]</code></pre>
       <div class="a"><p>SQLite gets one writer; so does the vault. tuskd enforces this with an advisory <code>flock</code> on <code>.tusk/lock</code> that dies with the process — stale locks can't wedge the vault. Everything else (stdio sessions, CLI commands, the dashboard) routes through the owner over its Unix socket, so you get concurrency without corruption.</p></div>
     </details>
     <details>
-      <summary>I lost an agent's token. Now what?</summary>
-      <div class="a"><p>Tokens are shown once and never stored in recoverable form. Revoke the agent and re-create it with the same grants: <code>tuskd agent revoke &lt;id&gt;</code>, then <code>tuskd agent create &lt;id&gt; --read … --write …</code>. Its memories stay — scopes belong to the vault, not the credential.</p></div>
-    </details>
-    <details>
       <summary>Where does my data actually live?</summary>
       <div class="a"><p>In the vault directory you initialized: one Markdown file per record under <code>memory/</code>, skills under <code>skills/</code>, and derived state under <code>.tusk/</code>. Nothing leaves your machine — tuskd binds to localhost only and makes no outbound network calls. Back up the vault by copying the directory, or use <code>tuskd export</code>.</p></div>
-    </details>
-    <details>
-      <summary>I edited vault files by hand while nothing was running. Is the index stale?</summary>
-      <div class="a"><p>No — both daemon start and embedded open run an idempotent <code>index rebuild</code>, so offline edits are always picked up. You can also force it any time with <code>tuskd index rebuild</code>.</p></div>
     </details>
     <details>
       <summary>Can two machines share a vault?</summary>
@@ -729,6 +484,7 @@ tuskd dashboard [--no-open]</code></pre>
       <summary>macOS says the binary "cannot be verified"?</summary>
       <div class="a"><p>Releases aren't codesigned yet. Installs via <code>curl … | sh</code> aren't quarantined, so this only appears if you downloaded a tarball with a browser — clear it with <code>xattr -d com.apple.quarantine ~/.local/bin/tuskd</code>. Signing and notarization are on the release roadmap.</p></div>
     </details>
+    <p style="margin-top:26px; color:var(--muted);">More answers — lost tokens, stale indexes, backups — in <a href="/docs#faq">the docs FAQ</a>.</p>
   </div>
 </section>
 
@@ -741,6 +497,7 @@ tuskd dashboard [--no-open]</code></pre>
         <span class="tagline">— memory that lasts, memory that's yours.</span>
       </div>
       <div class="footer-links">
+        <a href="/docs">Docs</a>
         <a href="https://mindfulagentslab.com" rel="noopener">Mindful Agents Lab</a>
         <a href="https://dockage.ai" rel="noopener">dockage.ai</a>
       </div>
@@ -790,7 +547,7 @@ tuskd dashboard [--no-open]</code></pre>
   });
 
   // Scrollspy
-  const links = Array.from(document.querySelectorAll('#nav-links a'));
+  const links = Array.from(document.querySelectorAll('#nav-links a[href^="#"]'));
   const targets = links.map(a => document.querySelector(a.getAttribute('href')));
   if ('IntersectionObserver' in window) {
     const spy = new IntersectionObserver((es) => {
