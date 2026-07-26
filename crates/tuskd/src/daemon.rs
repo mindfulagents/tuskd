@@ -110,23 +110,28 @@ pub fn run(config: Config) -> Result<(), CoreError> {
             });
         }
 
+        // Shutdown request channel (D18): `tuskd stop` over UDS.
+        let stop = Arc::new(tokio::sync::Notify::new());
+
         // UDS accept loop.
         {
             let ctx = Arc::clone(&ctx);
             let config = Arc::clone(&config);
+            let stop = Arc::clone(&stop);
             tokio::spawn(async move {
                 while let Ok((stream, _)) = uds.accept().await {
                     let ctx = Arc::clone(&ctx);
                     let config = Arc::clone(&config);
+                    let stop = Arc::clone(&stop);
                     tokio::spawn(async move {
-                        let _ = handle_uds(stream, ctx, config).await;
+                        let _ = handle_uds(stream, ctx, config, stop).await;
                     });
                 }
             });
         }
 
         axum::serve(tcp, app)
-            .with_graceful_shutdown(shutdown_signal())
+            .with_graceful_shutdown(shutdown_signal(stop))
             .await
             .map_err(|e| CoreError::Other(format!("http serve: {e}")))
     });
@@ -138,15 +143,16 @@ pub fn run(config: Config) -> Result<(), CoreError> {
     result
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(stop: Arc<tokio::sync::Notify>) {
     let mut sigterm = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
     {
         Ok(s) => s,
-        Err(_) => return std::future::pending().await,
+        Err(_) => return stop.notified().await,
     };
     tokio::select! {
         _ = sigterm.recv() => {},
         _ = tokio::signal::ctrl_c() => {},
+        _ = stop.notified() => {},
     }
 }
 
@@ -212,6 +218,7 @@ async fn handle_uds(
     stream: UnixStream,
     ctx: Arc<TuskContext>,
     config: Arc<Config>,
+    stop: Arc<tokio::sync::Notify>,
 ) -> Result<(), CoreError> {
     let (read_half, mut write_half) = stream.into_split();
     let mut lines = BufReader::new(read_half).lines();
@@ -234,7 +241,17 @@ async fn handle_uds(
     };
 
     if let Some(admin_req) = header.get("tusk_admin") {
-        let resp = match serde_json::from_value::<AdminRequest>(admin_req.clone()) {
+        let parsed = serde_json::from_value::<AdminRequest>(admin_req.clone());
+        // D18: shutdown is a daemon-lifecycle concern, not a core operation —
+        // ack first, then trigger the graceful-shutdown path.
+        if matches!(parsed, Ok(AdminRequest::Shutdown)) {
+            let _ = write_half
+                .write_all(b"{\"ok\":true,\"data\":{\"stopping\":true}}\n")
+                .await;
+            stop.notify_one();
+            return Ok(());
+        }
+        let resp = match parsed {
             Ok(req) => admin::execute(&ctx, &config.graduation, &req, true),
             Err(e) => crate::admin::AdminResponse {
                 ok: false,

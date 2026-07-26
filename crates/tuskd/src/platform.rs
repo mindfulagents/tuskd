@@ -54,6 +54,39 @@ pub fn claude_desktop_config_path(home: &Path) -> PathBuf {
     }
 }
 
+/// Spawn `tuskd --vault <vault> start` fully detached (own process group,
+/// no inherited stdio), appending stdout/stderr to `log` (D18). Returns the
+/// child's pid; the caller is responsible for waiting until it's ready.
+pub fn spawn_detached(exe: &Path, vault: &Path, log: &Path) -> Result<u32, CoreError> {
+    if let Some(dir) = log.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| CoreError::io(dir.display().to_string(), e))?;
+    }
+    let out = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log)
+        .map_err(|e| CoreError::io(log.display().to_string(), e))?;
+    let err = out
+        .try_clone()
+        .map_err(|e| CoreError::io(log.display().to_string(), e))?;
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg("--vault")
+        .arg(vault)
+        .arg("start")
+        .stdin(std::process::Stdio::null())
+        .stdout(out)
+        .stderr(err);
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+    let child = cmd
+        .spawn()
+        .map_err(|e| CoreError::Other(format!("spawn daemon: {e}")))?;
+    Ok(child.id())
+}
+
 /// Create a directory accessible only by the owning user (0700 on Unix).
 /// Used for the agent private-key store (D17).
 pub fn create_private_dir(dir: &Path) -> Result<(), CoreError> {

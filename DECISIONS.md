@@ -175,3 +175,32 @@ amended); `AgentCreate` admin verb gains an optional `show_key` field
 files under `.tusk/` are additive. Coverage:
 `agent_keys_are_stored_privately_and_never_exported` in
 `tests/acceptance/setup_acceptance.rs`.
+
+## D18 — Daemon lifecycle: `stop`, `restart`, `start --detach` (2026-07-26)
+
+Killing the daemon by PID was the last lifecycle step that required knowing
+the internals (and the upgrade flow made that visible). Additive CLI, spec §7
+amended.
+
+- `tuskd stop` sends a new `shutdown` verb over the **UDS admin plane** —
+  no signals, no PID files. The daemon acks, then triggers the same graceful
+  path as SIGTERM (socket + admin-token removed, lock released); `stop`
+  waits for the vault lock to release before returning, so the vault is
+  immediately reusable. Choosing the admin plane over PID+SIGTERM: no
+  stale-PID/PID-reuse hazards, no `unsafe`/libc, and it ports to the
+  Windows named-pipe seam. The flock stays the source of truth for
+  liveness; the PID in `.tusk/lock` remains informational.
+- `tuskd start --detach` (`-d`) re-execs itself in its own process group
+  with stdout/stderr appended to `.tusk/daemon.log`, waits up to 10s for
+  the socket to answer, prints pid + log path. Plain `start` stays
+  foreground (spec contract, launchd/systemd-friendly). `daemon.log` grows
+  unbounded — rotation is deliberately out of scope (local dev daemon;
+  revisit if it ever matters).
+- `tuskd restart [-d]` = tolerant stop, then start. Upgrade flow is now:
+  `curl -fsSL https://get.opentusk.ai | sh && tuskd restart -d`.
+- Not doing: supervision/auto-restart (service manager's job), PID-file
+  liveness, background-by-default `start` (silent contract change).
+
+Coverage: `daemon_lifecycle_detach_status_stop_restart` in
+`tests/acceptance/setup_acceptance.rs` (ephemeral HTTP port; kill-guard so a
+failed run can't wedge cargo test).

@@ -146,6 +146,7 @@ tuskd agent setup <client> [--agent <id>] [--http] [--print] [--remove] [--yes] 
 tuskd agent token rotate <id>                                                    # additive, D16
 tuskd agent create … [--show-key]   # D17: key stored at .tusk/keyring/keys/<id>.pem unless --show-key
 tuskd agent key path <id>                                                        # additive, D17
+tuskd start [--detach] | stop | restart [--detach]                               # stop/restart/-d additive, D18
 tuskd index [rebuild] | search "<q>" [--scope --as-of --k]
 tuskd review list | approve <qid> | reject <qid>
 tuskd graduate

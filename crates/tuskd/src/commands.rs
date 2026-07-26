@@ -26,9 +26,23 @@ pub fn run(cli: Cli) -> i32 {
 fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> {
     match command {
         Command::Init => init(vault),
-        Command::Start => {
-            let cfg = config::load(vault)?;
-            crate::daemon::run(cfg)
+        Command::Start { detach } => {
+            if detach {
+                start_detached(vault)
+            } else {
+                let cfg = config::load(vault)?;
+                crate::daemon::run(cfg)
+            }
+        }
+        Command::Stop => stop_daemon(vault, false),
+        Command::Restart { detach } => {
+            stop_daemon(vault, true)?;
+            if detach {
+                start_detached(vault)
+            } else {
+                let cfg = config::load(vault)?;
+                crate::daemon::run(cfg)
+            }
         }
         Command::Mcp { agent } => {
             let cfg = config::load(vault)?;
@@ -147,6 +161,69 @@ pub(crate) fn init(vault: &std::path::Path) -> Result<(), CoreError> {
     host.shutdown();
     println!("initialized vault at {}", vault.display());
     println!("next: tuskd agent create <id>   # then: tuskd start");
+    Ok(())
+}
+
+/// `tuskd start --detach` (D18): spawn the daemon in its own process group
+/// with output in `.tusk/daemon.log`, then wait until its socket answers.
+fn start_detached(vault: &std::path::Path) -> Result<(), CoreError> {
+    let cfg = config::load(vault)?;
+    if UnixStream::connect(&cfg.uds_path).is_ok() {
+        return Err(CoreError::Other(
+            "a daemon is already running for this vault".into(),
+        ));
+    }
+    let abs_vault = std::fs::canonicalize(vault).unwrap_or_else(|_| vault.to_path_buf());
+    let log = vault.join(".tusk").join("daemon.log");
+    let exe = std::env::current_exe().map_err(|e| CoreError::Other(format!("current_exe: {e}")))?;
+    let pid = crate::platform::spawn_detached(&exe, &abs_vault, &log)?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while UnixStream::connect(&cfg.uds_path).is_err() {
+        if std::time::Instant::now() > deadline {
+            return Err(CoreError::Other(format!(
+                "daemon (pid {pid}) did not come up within 10s — see {}",
+                log.display()
+            )));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    println!("daemon started (pid {pid}); log: {}", log.display());
+    println!("stop: tuskd stop   status: tuskd status   ui: tuskd dashboard");
+    Ok(())
+}
+
+/// `tuskd stop` (D18): graceful shutdown over the UDS admin plane, then wait
+/// for the vault lock to release so the vault is immediately reusable.
+fn stop_daemon(vault: &std::path::Path, tolerate_absent: bool) -> Result<(), CoreError> {
+    let cfg = config::load(vault)?;
+    if UnixStream::connect(&cfg.uds_path).is_err() {
+        if tolerate_absent {
+            println!("no daemon was running");
+            return Ok(());
+        }
+        return Err(CoreError::Other(
+            "no daemon is running for this vault".into(),
+        ));
+    }
+    admin_route(vault, &AdminRequest::Shutdown)?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        match crate::platform::VaultLock::acquire(vault) {
+            Ok(lock) => {
+                drop(lock);
+                break;
+            }
+            Err(_) if std::time::Instant::now() <= deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(_) => {
+                return Err(CoreError::Other(
+                    "daemon acknowledged the stop but did not exit within 10s".into(),
+                ));
+            }
+        }
+    }
+    println!("daemon stopped");
     Ok(())
 }
 

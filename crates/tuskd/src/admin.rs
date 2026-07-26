@@ -14,6 +14,9 @@ use tusk_mcp::TuskContext;
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum AdminRequest {
     Status,
+    /// D18: ask a running daemon to exit gracefully. Intercepted at the
+    /// daemon's UDS layer; reaching `execute` means no daemon was running.
+    Shutdown,
     Search {
         query: String,
         #[serde(default)]
@@ -132,6 +135,9 @@ fn execute_inner(
     daemon: bool,
 ) -> Result<Value, CoreError> {
     match req {
+        AdminRequest::Shutdown => Err(CoreError::Other(
+            "no daemon is running for this vault".into(),
+        )),
         AdminRequest::Status => {
             let stats = ctx.indexer.stats()?;
             let agents = ctx.keyring.list()?;

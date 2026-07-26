@@ -358,3 +358,59 @@ fn agent_keys_are_stored_privately_and_never_exported() {
         "operator token leaked:\n{listing}"
     );
 }
+
+/// Kills a leftover daemon so a failed test can't wedge cargo test's pipes
+/// (the daemon writes to .tusk/daemon.log, but belt and braces).
+struct DaemonGuard(PathBuf);
+impl Drop for DaemonGuard {
+    fn drop(&mut self) {
+        let sock = self.0.join(".tusk/tuskd.sock");
+        if std::os::unix::net::UnixStream::connect(&sock).is_ok() {
+            if let Ok(lock) = std::fs::read_to_string(self.0.join(".tusk/lock")) {
+                if let Some(pid) = lock.split_whitespace().next() {
+                    let _ = Command::new("kill").args(["-9", pid]).output();
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn daemon_lifecycle_detach_status_stop_restart() {
+    let w = world();
+    run_ok(&w, &["init"]);
+    // Ephemeral HTTP port so parallel tests never collide.
+    std::fs::write(w.vault.join(".tusk/tuskd.toml"), "http_port = 0\n").unwrap();
+    let _guard = DaemonGuard(w.vault.clone());
+
+    let stdout = run_ok(&w, &["start", "-d"]);
+    assert!(stdout.contains("daemon started"), "{stdout}");
+    let status = run_ok(&w, &["status"]);
+    assert!(status.contains("\"daemon\": true"), "{status}");
+
+    // Detached start refuses to double-start.
+    let (ok, _, stderr) = run(&w, &["start", "-d"]);
+    assert!(!ok);
+    assert!(stderr.contains("already running"), "{stderr}");
+
+    let stdout = run_ok(&w, &["stop"]);
+    assert!(stdout.contains("daemon stopped"), "{stdout}");
+    // Lock is free again: embedded commands work immediately.
+    let status = run_ok(&w, &["status"]);
+    assert!(status.contains("\"daemon\": false"), "{status}");
+
+    let (ok, _, stderr) = run(&w, &["stop"]);
+    assert!(!ok);
+    assert!(stderr.contains("no daemon"), "{stderr}");
+
+    // Cold restart tolerates the missing daemon and starts fresh.
+    let stdout = run_ok(&w, &["restart", "-d"]);
+    assert!(stdout.contains("no daemon was running"), "{stdout}");
+    assert!(stdout.contains("daemon started"), "{stdout}");
+    // Warm restart cycles the running daemon.
+    let stdout = run_ok(&w, &["restart", "-d"]);
+    assert!(stdout.contains("daemon stopped"), "{stdout}");
+    assert!(stdout.contains("daemon started"), "{stdout}");
+    run_ok(&w, &["stop"]);
+    assert!(w.vault.join(".tusk/daemon.log").is_file());
+}

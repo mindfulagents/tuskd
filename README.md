@@ -50,8 +50,8 @@ tuskd agent create hermes-dev \
   --promote project:opentusk
 
 # 3. Start the daemon (owns index + watcher; serves MCP over HTTP :7477 + UDS)
-tuskd start &
-sleep 1
+#    -d detaches it, logging to .tusk/daemon.log; `tuskd stop` shuts it down
+tuskd start -d
 curl -s http://127.0.0.1:7477/status
 
 # 4. Wire up your AI client in one command — writes the client's MCP config
@@ -78,8 +78,11 @@ tuskd review list
 tuskd dashboard          # prints the URL (with a one-per-run operator token)
                          # and opens it; --no-open to just print
 
-# Shut down
-kill %1
+# Shut down (graceful; waits for the vault lock to release)
+tuskd stop
+
+# Upgrading later: install the new binary, then cycle the daemon
+#   curl -fsSL https://get.opentusk.ai | sh && tuskd restart -d
 ```
 
 ## MCP tools
@@ -99,7 +102,7 @@ kill %1
 ## CLI
 
 ```
-tuskd init | start | status
+tuskd init | start [-d] | stop | restart [-d] | status
 tuskd mcp --agent <id>
 tuskd agent create <id> [--read s,s] [--write s,s] [--promote s,s] [--show-key]
 tuskd agent grant <id> <read|write|promote> <scope> | revoke <id> | list

@@ -17,7 +17,19 @@ pub enum Command {
     /// Initialize a new vault in the current directory
     Init,
     /// Start the daemon (owns index + watcher; serves MCP-HTTP, /status, UDS)
-    Start,
+    Start {
+        /// Run in the background, logging to .tusk/daemon.log
+        #[arg(long, short = 'd')]
+        detach: bool,
+    },
+    /// Stop the running daemon gracefully
+    Stop,
+    /// Stop the daemon (if running), then start it again
+    Restart {
+        /// Start detached, logging to .tusk/daemon.log
+        #[arg(long, short = 'd')]
+        detach: bool,
+    },
     /// Show daemon / vault status
     Status,
     /// Run an MCP stdio session (proxy to daemon, or embedded if none)

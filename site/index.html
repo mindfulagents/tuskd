@@ -393,10 +393,10 @@ MCP config (streamable HTTP):
       <div class="step-num">3</div>
       <div class="step-body">
         <h3>Start the daemon</h3>
-        <p>Exactly one <code>tuskd</code> process owns the index and file-watcher. It serves MCP over HTTP on <code>127.0.0.1:7477</code> and over a Unix socket.</p>
+        <p>Exactly one <code>tuskd</code> process owns the index and file-watcher. It serves MCP over HTTP on <code>127.0.0.1:7477</code> and over a Unix socket. <code>-d</code> detaches it (log at <code>.tusk/daemon.log</code>); <code>tuskd stop</code> shuts it down gracefully, <code>tuskd restart -d</code> cycles it after an upgrade.</p>
         <div class="codeblock">
           <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-          <pre><code>tuskd start &
+          <pre><code>tuskd start -d
 curl -s http://127.0.0.1:7477/status</code></pre>
         </div>
       </div>
@@ -607,7 +607,7 @@ tuskd agent revoke old-agent</code></pre>
     <h3>CLI</h3>
     <div class="codeblock">
       <div class="bar"><span class="lbl">tuskd --help</span><button class="copy-btn">copy</button></div>
-      <pre><code>tuskd init | start | status
+      <pre><code>tuskd init | start [-d] | stop | restart [-d] | status
 tuskd mcp --agent &lt;id&gt;
 tuskd agent create &lt;id&gt; [--read s,s] [--write s,s] [--promote s,s]
 tuskd agent grant &lt;id&gt; &lt;read|write|promote&gt; &lt;scope&gt; | revoke &lt;id&gt; | list
