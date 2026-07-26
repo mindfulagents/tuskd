@@ -39,7 +39,7 @@ change).
 ## Quickstart
 
 ```sh
-# (or build from source: cargo build --release; Rust stable, Apple Silicon first)
+# (or build from source: cargo build --release; Rust stable — macOS arm64/x86_64, Linux musl arm64/x86_64)
 export PATH="$HOME/.local/bin:$PATH"
 
 # 1. Initialize a vault
