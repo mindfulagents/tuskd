@@ -713,7 +713,10 @@ tuskd restart -d    <span class="c-com"># stop + start; the upgrade command</spa
   }
 
   // Version badge
-  fetch('/releases/latest.json').then(r => r.ok ? r.json() : null).then(m => {
+  fetch('https://api.github.com/repos/mindfulagents/tuskd/releases/latest')
+    .then(r => r.ok ? r.json() : null)
+    .then(m => m && m.tag_name ? { version: m.tag_name.replace(/^v/, '') } : fetch('/releases/latest.json').then(r => r.ok ? r.json() : null))
+    .then(m => {
     if (m && m.version) document.getElementById('ver-badge').textContent = 'tuskd v' + m.version;
   }).catch(() => {});
 </script>

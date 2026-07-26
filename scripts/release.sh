@@ -1,4 +1,8 @@
 #!/bin/sh
+# RETIRED for new releases (DECISIONS D19): v0.5.0+ are built by the
+# cargo-dist workflow on tag push and published to GitHub Releases. Kept
+# because pre-0.5.0 artifacts under site/releases/ were produced by it.
+#
 # Cut a tuskd release for the current host target.
 #
 #   scripts/release.sh [--skip-checks]
