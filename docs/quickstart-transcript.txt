@@ -6,8 +6,7 @@ token: tusk_0000000000000000REDACTED_DEMO_TOKEN0000000000000000
 
 private key (shown once, not stored):
 (demo private key redacted from transcript — regenerate with `tuskd agent create`)
-MFECAQEwBQYDK2VwBCIEIDCBn+Gue2uMk8qIOoJ/nUX+8s47fDyLxITnZ0qx2gwX
-gSEAnjvawxNFTN3tQeq7Du/CfjPy+JEEFp5IGbNhjUu7lAA=
+
 
 
 MCP config (stdio):
