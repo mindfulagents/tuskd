@@ -205,7 +205,31 @@ fn stop_daemon(vault: &std::path::Path, tolerate_absent: bool) -> Result<(), Cor
             "no daemon is running for this vault".into(),
         ));
     }
-    admin_route(vault, &AdminRequest::Shutdown)?;
+    match admin_route(vault, &AdminRequest::Shutdown) {
+        Ok(_) => {}
+        // Pre-D18 daemons don't know the shutdown verb; their admin parser
+        // rejects it by name. Fall back to SIGTERM via the pid recorded in
+        // .tusk/lock — every shipped version shuts down cleanly on SIGTERM.
+        Err(e) if e.to_string().contains("unknown variant `shutdown`") => {
+            let lock_path = vault.join(".tusk").join("lock");
+            let raw = std::fs::read_to_string(&lock_path)
+                .map_err(|e| CoreError::io(lock_path.display().to_string(), e))?;
+            let pid: u32 = raw
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .parse()
+                .map_err(|_| {
+                    CoreError::Other(format!(
+                        "no pid in {} — kill the daemon manually",
+                        lock_path.display()
+                    ))
+                })?;
+            println!("daemon predates the shutdown verb — sending SIGTERM to pid {pid}");
+            crate::platform::terminate_pid(pid)?;
+        }
+        Err(e) => return Err(e),
+    }
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         match crate::platform::VaultLock::acquire(vault) {

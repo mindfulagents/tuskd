@@ -87,6 +87,25 @@ pub fn spawn_detached(exe: &Path, vault: &Path, log: &Path) -> Result<u32, CoreE
     Ok(child.id())
 }
 
+/// Politely terminate a process by pid via /bin/kill (no libc, keeps the
+/// no-unsafe rule). Used only as the `tuskd stop` fallback for daemons too
+/// old to know the UDS `shutdown` verb (D18). SIGTERM triggers the same
+/// graceful path in every daemon version shipped.
+pub fn terminate_pid(pid: u32) -> Result<(), CoreError> {
+    let out = std::process::Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .output()
+        .map_err(|e| CoreError::Other(format!("kill: {e}")))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(CoreError::Other(format!(
+            "kill -TERM {pid} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )))
+    }
+}
+
 /// Create a directory accessible only by the owning user (0700 on Unix).
 /// Used for the agent private-key store (D17).
 pub fn create_private_dir(dir: &Path) -> Result<(), CoreError> {

@@ -204,3 +204,15 @@ amended.
 Coverage: `daemon_lifecycle_detach_status_stop_restart` in
 `tests/acceptance/setup_acceptance.rs` (ephemeral HTTP port; kill-guard so a
 failed run can't wedge cargo test).
+
+### D18 addendum — v0.4.1: `stop` falls back to SIGTERM for pre-D18 daemons
+
+Found in the field immediately: `tuskd restart -d` after upgrading failed,
+because the *running* daemon predates the `shutdown` verb and its admin
+parser rejects it (`unknown variant`). v0.4.1: when `stop`/`restart` get
+that specific error, they read the pid from `.tusk/lock` and send SIGTERM
+via `/bin/kill` (`platform::terminate_pid` — a spawned process, keeping
+`#![forbid(unsafe_code)]`), then wait for the lock as usual. Every shipped
+daemon version exits cleanly on SIGTERM, so the fallback is safe; it only
+triggers on the exact unknown-variant error, so a healthy new daemon is
+never signaled. Verified against the archived v0.3.0 binary.
