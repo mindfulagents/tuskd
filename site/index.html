@@ -562,7 +562,10 @@ tuskd search "env parity" --scope project:demo</code></pre>
   }
 
   // Version badge from the release manifest (same origin on both hosts)
-  fetch('/releases/latest.json').then(r => r.ok ? r.json() : null).then(m => {
+  fetch('https://api.github.com/repos/mindfulagents/tuskd/releases/latest')
+    .then(r => r.ok ? r.json() : null)
+    .then(m => m && m.tag_name ? { version: m.tag_name.replace(/^v/, '') } : fetch('/releases/latest.json').then(r => r.ok ? r.json() : null))
+    .then(m => {
     if (m && m.version) {
       document.getElementById('ver-badge').textContent = 'tuskd v' + m.version;
       document.querySelectorAll('code').forEach(() => {});

@@ -167,24 +167,23 @@ contract is `tuskd-rust-spec.md`.
 ## Releases & the website
 
 Versioning is SemVer; the single source of truth for the version is
-`[workspace.package] version` in `Cargo.toml`. To cut and ship a release:
+`[workspace.package] version` in `Cargo.toml`. To cut and ship a release
+(DECISIONS.md D19):
 
 ```sh
-# 1. bump version in Cargo.toml ([workspace.package])
-# 2. build, test, package, and update the manifest:
-./scripts/release.sh          # writes site/releases/v<V>/… + latest.json
-# 3. publish site + installer + artifacts (needs .env.deploy):
-./scripts/deploy-site.sh
-# 4. commit — release tarballs are committed so deploys are reproducible
-git add -A && git commit -m "release: v<V>"
+# 1. bump version in Cargo.toml ([workspace.package]), merge to main (CI green)
+# 2. tag it — the cargo-dist workflow builds all four targets and
+#    publishes the GitHub Release with tarballs + sha256 checksums:
+git tag v<V> && git push origin v<V>
 ```
 
-`site/` is the whole public web presence: `index.html` (opentusk.ai docs
-page), `install.sh` (served at get.opentusk.ai), and `releases/` (immutable
-version dirs + `latest.json`, which the installer and the page's version
-badge both read). Hosting details and the rationale for serving artifacts
-from Vercel static files (vs. GitHub Releases, for now) are in
-`DECISIONS.md` D15.
+Release config lives in `dist-workspace.toml`; regenerate the workflow with
+`dist generate` after editing it. `site/` is the public web presence:
+`index.html` (opentusk.ai), `docs.html`, and `install.sh` (served at
+get.opentusk.ai) — deploy site changes with `./scripts/deploy-site.sh`
+(needs `.env.deploy`). Pre-0.5.0 artifacts remain immutable under
+`site/releases/`; hosting history is in `DECISIONS.md` D15, the release
+pipeline in D19.
 
 ## License
 
