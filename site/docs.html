@@ -246,7 +246,7 @@ tuskd mcp --agent &lt;id&gt;      <span class="c-com">→ thin stdio ⇄ UDS pro
       <pre><code>curl -fsSL https://get.opentusk.ai | sh</code></pre>
     </div>
     <div class="prose">
-      <p>Options via environment variables: <code>TUSKD_INSTALL_DIR</code> changes the destination; <code>TUSKD_VERSION</code> pins a release. Every release is immutable and stays available at <code>get.opentusk.ai/releases/&lt;version&gt;/…</code>, so pinned installs are reproducible.</p>
+      <p>Options via environment variables: <code>TUSKD_INSTALL_DIR</code> changes the destination; <code>TUSKD_VERSION</code> pins a release. Releases are immutable: v0.5.0+ live on <a href="https://github.com/mindfulagents/tuskd/releases" rel="noopener">GitHub Releases</a> (built by CI for every target), and older versions stay available at <code>get.opentusk.ai/releases/&lt;version&gt;/…</code> — pinned installs are reproducible either way.</p>
     </div>
 
     <h3>Pin a version</h3>
@@ -258,11 +258,11 @@ tuskd mcp --agent &lt;id&gt;      <span class="c-com">→ thin stdio ⇄ UDS pro
     <h3>Verify manually</h3>
     <div class="codeblock">
       <div class="bar"><span class="lbl">shell</span><button class="copy-btn">copy</button></div>
-      <pre><code>V=$(curl -fsSL https://get.opentusk.ai/releases/latest.json | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p')
-curl -fsSLO "https://get.opentusk.ai/releases/v$V/tuskd-v$V-aarch64-apple-darwin.tar.gz"
-curl -fsSLO "https://get.opentusk.ai/releases/v$V/tuskd-v$V-aarch64-apple-darwin.tar.gz.sha256"
-shasum -a 256 -c "tuskd-v$V-aarch64-apple-darwin.tar.gz.sha256"
-tar xzf "tuskd-v$V-aarch64-apple-darwin.tar.gz"</code></pre>
+      <pre><code>B=https://github.com/mindfulagents/tuskd/releases/latest/download
+curl -fsSLO "$B/tuskd-aarch64-apple-darwin.tar.gz"
+curl -fsSLO "$B/tuskd-aarch64-apple-darwin.tar.gz.sha256"
+shasum -a 256 -c "tuskd-aarch64-apple-darwin.tar.gz.sha256"
+tar xzf "tuskd-aarch64-apple-darwin.tar.gz"</code></pre>
     </div>
     <div class="prose">
       <p>Checksums are published next to every artifact; the installer script performs this same verification automatically. Or build from source (<a href="https://github.com/mindfulagents/tuskd" rel="noopener">github.com/mindfulagents/tuskd</a>): <code>cargo build --release</code> on Rust stable.</p>
@@ -273,9 +273,10 @@ tar xzf "tuskd-v$V-aarch64-apple-darwin.tar.gz"</code></pre>
       <table>
         <tr><th>Platform</th><th>Target</th><th>Status</th></tr>
         <tr><td>macOS (Apple Silicon)</td><td><code>aarch64-apple-darwin</code></td><td class="yes">✓ available</td></tr>
-        <tr><td>Linux x86_64</td><td><code>x86_64-unknown-linux-musl</code> (static)</td><td class="soon">planned</td></tr>
-        <tr><td>Linux arm64</td><td><code>aarch64-unknown-linux-musl</code> (static)</td><td class="soon">planned</td></tr>
-        <tr><td>macOS (Intel) / Windows</td><td>—</td><td class="soon">later</td></tr>
+        <tr><td>macOS (Intel)</td><td><code>x86_64-apple-darwin</code></td><td class="yes">✓ available</td></tr>
+        <tr><td>Linux x86_64</td><td><code>x86_64-unknown-linux-musl</code> (static)</td><td class="yes">✓ available</td></tr>
+        <tr><td>Linux arm64</td><td><code>aarch64-unknown-linux-musl</code> (static)</td><td class="yes">✓ available</td></tr>
+        <tr><td>Windows</td><td>—</td><td class="soon">later</td></tr>
       </table>
     </div>
     <div class="prose">
