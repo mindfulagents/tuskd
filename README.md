@@ -27,8 +27,14 @@ curl -fsSL https://get.opentusk.ai | sh
 
 Detects the platform, verifies the SHA-256 checksum, installs to
 `~/.local/bin` (override with `TUSKD_INSTALL_DIR`), never sudo. Pin a
-release with `TUSKD_VERSION=v0.1.0`. Docs live at
-[opentusk.ai](https://opentusk.ai); the page source is `site/index.html`.
+release with `TUSKD_VERSION=v0.1.0`.
+
+**Full documentation lives at [opentusk.ai/docs](https://opentusk.ai/docs)** —
+install options, agents & grants, the memory model, the gate, MCP tools, CLI,
+dashboard, configuration, and operations. [opentusk.ai](https://opentusk.ai)
+is the intro + quickstart; page sources are `site/index.html` and
+`site/docs.html` (keep both in lockstep with this README when contracts
+change).
 
 ## Quickstart
 

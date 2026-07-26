@@ -5,115 +5,148 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenTusk — tuskd dashboard</title>
 <style>
+  /* OpenTusk brand theme — dark warm ("tar / bone / tusk amber"), matches opentusk.ai */
   :root {
-    --bg: #f6f7f9; --surface: #ffffff; --ink: #1a1f26; --muted: #5c6570;
-    --border: #e2e6ea; --accent: #0b6bcb; --accent-ink: #ffffff;
-    --good: #1a7f37; --bad: #b42318; --warn: #9a6700;
-    --code-bg: #f0f2f5;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #10141a; --surface: #171c24; --ink: #e6e9ed; --muted: #98a2ad;
-      --border: #2a323d; --accent: #58a6ff; --accent-ink: #0b1520;
-      --good: #3fb950; --bad: #f85149; --warn: #d29922;
-      --code-bg: #0d1117;
-    }
+    --bg: #0e0c0b; --surface: #1c1917; --nav-bg: #131110;
+    --ink: #efe9dc; --muted: #a39b8d; --faint: #6f695e;
+    --border: #2c2722; --accent: #dca85e; --accent-dim: #b8873f; --accent-ink: #131110;
+    --good: #79a88d; --bad: #cf6f5f; --warn: #dca85e;
+    --code-bg: #0e0c0b;
+    --serif: "Charter", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
     font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code, pre, .mono { font-family: var(--mono); }
 
   .layout { display: flex; min-height: 100vh; }
   nav {
-    width: 200px; flex: none; padding: 20px 12px; border-right: 1px solid var(--border);
-    background: var(--surface);
+    width: 208px; flex: none; padding: 20px 12px; border-right: 1px solid var(--border);
+    background: var(--nav-bg);
   }
-  nav .brand { font-weight: 700; font-size: 15px; padding: 4px 10px 14px; }
-  nav .brand small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+  nav .brand {
+    font-family: var(--serif); font-weight: 500; font-size: 16px; padding: 4px 10px 16px;
+    display: flex; align-items: center; gap: 9px; color: var(--ink);
+  }
+  nav .brand .tusk { color: var(--accent); }
+  .brand-mark { width: 30px; height: 22px; color: var(--accent); stroke: currentColor; stroke-width: 1.3; flex: none; }
+  nav .brand small {
+    display: block; color: var(--faint); font-weight: 400; font-size: 10px;
+    font-family: var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  }
   nav a.item {
-    display: block; padding: 7px 10px; border-radius: 6px; color: var(--ink); margin: 1px 0;
+    display: block; padding: 7px 10px; border-radius: 7px; color: var(--muted); margin: 1px 0;
   }
-  nav a.item:hover { background: var(--bg); text-decoration: none; }
-  nav a.item.active { background: var(--accent); color: var(--accent-ink); }
-  main { flex: 1; padding: 24px 28px; max-width: 1100px; }
-  h1 { font-size: 18px; margin: 0 0 16px; }
-  h2 { font-size: 14px; margin: 22px 0 8px; }
+  nav a.item:hover { background: var(--surface); color: var(--ink); text-decoration: none; }
+  nav a.item.active { background: rgba(220, 168, 94, 0.13); color: var(--accent); }
+  main { flex: 1; padding: 24px 28px; max-width: 1100px; min-width: 0; }
+  h1 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0 0 16px; }
+  h2 { font-family: var(--serif); font-weight: 500; font-size: 16px; margin: 22px 0 8px; }
 
   .tiles { display: flex; flex-wrap: wrap; gap: 12px; }
   .tile {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 14px 18px; min-width: 150px;
   }
-  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .tile .label {
+    font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+    letter-spacing: .14em; color: var(--faint);
+  }
   .tile .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
 
   .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 16px 18px; margin-top: 14px;
   }
   table { width: 100%; border-collapse: collapse; }
   th {
-    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--muted); font-weight: 600; padding: 6px 10px 6px 0;
+    text-align: left; font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+    letter-spacing: .12em; color: var(--faint); font-weight: 500; padding: 6px 10px 6px 0;
   }
   td { padding: 7px 10px 7px 0; border-top: 1px solid var(--border); vertical-align: top; }
   tr.click { cursor: pointer; }
-  tr.click:hover td { background: var(--bg); }
+  tr.click:hover td { background: rgba(220, 168, 94, 0.05); }
   .muted { color: var(--muted); }
   .small { font-size: 12px; }
   .nowrap { white-space: nowrap; }
 
   .badge {
     display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px;
-    border: 1px solid var(--border); color: var(--muted);
+    font-family: var(--mono); border: 1px solid var(--border); color: var(--muted);
   }
   .badge.good { color: var(--good); border-color: var(--good); }
   .badge.bad { color: var(--bad); border-color: var(--bad); }
 
   input, select, button, textarea {
-    font: inherit; color: var(--ink); background: var(--surface);
-    border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+    font: inherit; color: var(--ink); background: var(--nav-bg);
+    border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px;
   }
-  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  button { cursor: pointer; }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  input::placeholder, textarea::placeholder { color: var(--faint); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-dim); outline-offset: -1px; }
+  button { cursor: pointer; background: var(--surface); }
+  button:hover { border-color: var(--accent-dim); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
   button.danger { color: var(--bad); border-color: var(--bad); background: transparent; }
-  button.danger.armed { background: var(--bad); color: #fff; }
+  button.danger.armed { background: var(--bad); color: #1c1210; }
   button:disabled { opacity: .5; cursor: default; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
   .row label { font-size: 12px; color: var(--muted); }
 
   pre.body {
-    background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
     padding: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
   }
   .kv { display: grid; grid-template-columns: 140px 1fr; gap: 4px 12px; font-size: 13px; }
-  .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
+  .kv dt { color: var(--faint); font-family: var(--mono); font-size: 12px; } .kv dd { margin: 0; word-break: break-all; }
 
   #toast {
     position: fixed; bottom: 18px; right: 18px; max-width: 380px; display: none;
     background: var(--ink); color: var(--bg); padding: 10px 14px; border-radius: 8px; font-size: 13px;
     z-index: 10;
   }
-  #toast.bad { background: var(--bad); color: #fff; }
+  #toast.bad { background: var(--bad); color: #1c1210; }
 
-  #auth { max-width: 420px; margin: 12vh auto; }
+  #auth { max-width: 440px; margin: 12vh auto; }
+  #auth h1 { display: flex; align-items: center; gap: 10px; }
+  #auth .tusk { color: var(--accent); }
   .tokenbox {
-    background: var(--code-bg); border: 1px dashed var(--border); border-radius: 6px;
+    background: var(--code-bg); border: 1px dashed var(--accent-dim); border-radius: 8px;
     padding: 12px; margin-top: 10px; word-break: break-all;
   }
   .hidden { display: none !important; }
+
+  @media (max-width: 720px) {
+    .layout { display: block; }
+    nav {
+      width: auto; display: flex; align-items: center; gap: 2px; padding: 10px 12px;
+      border-right: 0; border-bottom: 1px solid var(--border);
+      overflow-x: auto; white-space: nowrap; scrollbar-width: none;
+      position: sticky; top: 0; z-index: 5;
+    }
+    nav::-webkit-scrollbar { display: none; }
+    nav .brand { padding: 0 10px 0 0; }
+    nav .brand small { display: none; }
+    main { padding: 18px 16px; }
+  }
 </style>
 </head>
 <body>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mammoth" viewBox="16 22 72 54">
+    <path fill="currentColor" stroke-linejoin="round" stroke-linecap="round" d="M84.7168,48.9927c-0.3313-0.0327-0.6077,0.2066-0.6383,0.5284c-0.5835,6.2136-5.2457,11.0521-11.2156,12.0243v-23.124c0-0.1552-0.0619-0.3043-0.1718-0.4142L60.1423,25.4571c-0.1692-0.1705-0.4238-0.2193-0.6452-0.1243l-4.5122,1.9348c-3.3901-2.0002-7.2641-3.0557-11.2235-3.0557c-12.1878,0-22.1052,9.9091-22.1174,22.0952c-1.6209,3.1507-2.4423,6.5417-2.4423,10.0821c0,3.006,0.5903,5.9126,1.7552,8.6504L18.954,65.572c-0.2563,0.0685-0.4351,0.3008-0.4351,0.5663l0.0009,6.9013c0,0.3235,0.2625,0.5859,0.5859,0.5859h7.319c0.3235,0,0.5859-0.2625,0.5859-0.5859v-2.8442c2.1023-1.6816,3.8469-3.7034,5.1951-5.971c0.5851,0.0465,1.1833,0.0759,1.7908,0.0759c4.5811,0,8.9294-1.3676,12.6465-3.9673v14.4645c0,0.3235,0.2625,0.5859,0.5859,0.5859h9.375c0.3235,0,0.5859-0.2625,0.5859-0.5859V56.7987c0-0.5452,0.2983-1.0217,0.7506-1.2815c1.8351,3.1962,4.8306,5.6432,8.4169,6.7448c0.0275,0.1767,0.0462,0.3547,0.0462,0.5335c0,1.9422-1.5799,3.5226-3.5461,3.5226c-0.0018,0-0.0026,0-0.0035,0c-0.3235,0-0.5859,0.2625-0.5859,0.5859v5.2887c0,0.3235,0.2869,0.5877,0.6104,0.5877c5.5054,0,9.9845-4.4791,9.9845-9.9849v-0.0675c6.5799-0.9836,11.742-6.2772,12.3823-13.0969C85.2757,49.3088,85.0385,49.0228,84.7168,48.9927z M57.1655,48.2476c0-2.3076,0.5844-4.5437,1.6903-6.5378c0.0665-0.1035,0.145-0.1971,0.2078-0.3034c0.0234-0.0396,0.0303-0.0829,0.0435-0.125c0.1168-0.1935,0.2314-0.3882,0.3584-0.5765c0.1814-0.2681,0.1099-0.6321-0.1578-0.8131c-0.2686-0.1814-0.6321-0.1099-0.8135,0.1578c-0.2344,0.3476-0.4484,0.7058-0.6509,1.0693c-1.6419,2.5214-4.4687,4.0834-7.4886,4.0834c-3.3437,0-6.3302-1.8208-7.89-4.7567l5.276-9.4371c0.1578-0.2825,0.0567-0.6396-0.2258-0.7974c-0.2843-0.1578-0.6391-0.0567-0.7978,0.2254l-5.3655,9.597c-0.1587,0.1723-0.2072,0.4288-0.098,0.6521c1.7116,3.5086,5.1993,5.6885,9.1012,5.6885c2.2727,0,4.45-0.7828,6.2028-2.1423c-0.3678,1.2961-0.564,2.6435-0.564,4.0157c0,2.2278,0.5142,4.333,1.4071,6.2257c-0.8358,0.4575-1.3827,1.3327-1.3827,2.3253v17.4129h-8.2031V59.1721c0-0.0137-0.01-0.0245-0.0109-0.038c-0.0041-0.1852-0.0851-0.3659-0.2516-0.476c-2.4048-1.5943-4.4242-3.6298-6.0006-6.0503c-0.1761-0.2703-0.5397-0.3501-0.8109-0.1709c-0.2712,0.1766-0.3479,0.5397-0.1709,0.8109c1.5156,2.3261,3.4364,4.2961,5.6815,5.9041c-3.5823,2.5938-7.7975,3.9766-12.255,3.9766c-0.3944,0-0.7723-0.0344-1.1576-0.0551c0.6176-1.1971,1.1409-2.4482,1.5352-3.7579c0.0933-0.31-0.082-0.6369-0.3915-0.7302c-0.3148-0.095-0.6374,0.082-0.7298,0.3919c-0.4609,1.5297-1.091,2.9842-1.8708,4.348c-0.005,0.0086-0.0092,0.0172-0.0137,0.026c-1.3415,2.3383-3.1304,4.4046-5.3037,6.0983c-0.1421,0.1112-0.2258,0.2816-0.2258,0.4621v2.5421h-6.1471l-0.0009-5.865l2.2313-0.5929c0.1674-0.0445,0.306-0.1609,0.3793-0.3174c0.0741-0.1565,0.0741-0.3379,0.0017-0.4948c-1.28-2.7671-1.9296-5.726-1.9296-8.7943c0-3.4014,0.8013-6.6572,2.3804-9.6776c0.0445-0.0837,0.0671-0.177,0.0671-0.2716l-0.0052-0.1094c0-11.55,9.3959-20.9468,20.9455-20.9468c3.8461,0,7.6067,1.0515,10.8747,3.0409c0.1604,0.099,0.3601,0.1125,0.5354,0.0379l4.4233-1.8965l12.0963,12.098v23.0224c-0.3433,0.0258-0.6876,0.0485-1.0376,0.0485C63.2159,61.7351,57.1655,55.6848,57.1655,48.2476z M63.4399,71.5879V67.458c2.3263-0.2781,4.1356-2.2631,4.1356-4.6626c0-0.0746-0.0102-0.1486-0.0138-0.2231c0.9978,0.2152,2.0306,0.3347,3.0918,0.3347c0.3489,0,0.6917-0.0247,1.0345-0.0484C71.6548,67.4935,68.0287,71.2898,63.4399,71.5879z M67.1413,43.5994c0.2293,0.2284,0.2293,0.5995,0,0.8283c-0.1142,0.1147-0.2642,0.1718-0.4142,0.1718s-0.3-0.0571-0.4142-0.1718l-1.7918-1.7914c-0.2293-0.2284-0.2293-0.5995,0-0.8283c0.2284-0.2293,0.5999-0.2293,0.8283,0L67.1413,43.5994z"/>
+  </symbol>
+</svg>
+
 <div id="auth" class="card hidden">
-  <h1>OpenTusk dashboard</h1>
+  <h1><svg class="brand-mark" viewBox="0 0 72 54" aria-hidden="true"><use href="#mammoth"/></svg><span>Open<span class="tusk">Tusk</span> dashboard</span></h1>
   <p class="muted">Paste the operator token for this daemon. Get it with
   <code>tuskd dashboard</code>, or from <code>.tusk/admin-token</code> in the vault.</p>
   <div class="row">
@@ -125,7 +158,7 @@
 
 <div id="app" class="layout hidden">
   <nav>
-    <div class="brand">OpenTusk<small>tuskd dashboard</small></div>
+    <div class="brand"><svg class="brand-mark" viewBox="0 0 72 54" aria-hidden="true"><use href="#mammoth"/></svg><span>Open<span class="tusk">Tusk</span><small>tuskd dashboard</small></span></div>
     <a class="item" href="#/overview">Overview</a>
     <a class="item" href="#/search">Search</a>
     <a class="item" href="#/memories">Memories</a>
