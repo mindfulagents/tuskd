@@ -73,6 +73,12 @@ pub enum AdminRequest {
     RecordGet {
         id: String,
     },
+    /// Dashboard overview: status plus activity/recent/review/agent aggregates
+    /// in one round-trip (additive; the web UI's front page).
+    Overview {
+        #[serde(default)]
+        days: Option<u32>,
+    },
     Forget {
         id: String,
     },
@@ -281,6 +287,45 @@ fn execute_inner(
             let mut out = tusk_mcp::record_json(&rec);
             out["path"] = json!(path.display().to_string());
             Ok(out)
+        }
+        AdminRequest::Overview { days } => {
+            let days = days.unwrap_or(14).clamp(1, 90) as i64;
+            let now = ctx.vault.now();
+            let since_day = now.date_naive() - chrono::Days::new(days as u64 - 1);
+            let since = since_day.and_hms_opt(0, 0, 0).unwrap_or_default().and_utc();
+            let counts = ctx.indexer.created_per_day(since)?;
+            // Zero-fill so the UI gets exactly `days` buckets, oldest first.
+            let activity: Vec<Value> = (0..days)
+                .map(|i| {
+                    let day = (since_day + chrono::Days::new(i as u64)).to_string();
+                    let n = counts
+                        .iter()
+                        .find(|(d, _)| *d == day)
+                        .map(|(_, n)| *n)
+                        .unwrap_or(0);
+                    json!([day, n])
+                })
+                .collect();
+            let recent = ctx.indexer.search(&SearchQuery {
+                query: String::new(),
+                include_invalid: true,
+                k: 8,
+                ..Default::default()
+            })?;
+            let review = ctx.gate.review_list()?;
+            Ok(json!({
+                "version": env!("CARGO_PKG_VERSION"),
+                "vault": ctx.vault.root().display().to_string(),
+                "daemon": daemon,
+                "index": ctx.indexer.stats()?,
+                "review_queue_depth": review.len(),
+                "review_preview": review.iter().take(3).collect::<Vec<_>>(),
+                "agents": ctx.keyring.list()?.len(),
+                "days": days,
+                "activity": activity,
+                "recent": recent,
+                "authors": ctx.indexer.author_activity()?,
+            }))
         }
         AdminRequest::Forget { id } => {
             ctx.vault.forget(id)?;

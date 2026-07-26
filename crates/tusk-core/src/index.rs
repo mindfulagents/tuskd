@@ -76,6 +76,15 @@ pub struct IndexStats {
     pub by_type: Vec<(String, i64)>,
 }
 
+/// Per-author aggregate for the dashboard overview.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AuthorActivity {
+    pub author: String,
+    pub records: i64,
+    pub valid: i64,
+    pub last_created: String,
+}
+
 fn fmt_ts(t: DateTime<Utc>) -> String {
     t.to_rfc3339_opts(SecondsFormat::Millis, true)
 }
@@ -246,6 +255,48 @@ impl Indexer {
             by_scope,
             by_type,
         })
+    }
+
+    /// Records created per UTC day since `since` (inclusive), ascending by
+    /// day. Days with no records are absent — callers zero-fill.
+    pub fn created_per_day(&self, since: DateTime<Utc>) -> Result<Vec<(String, i64)>, CoreError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT substr(created_at, 1, 10) AS day, COUNT(*) FROM records \
+             WHERE created_at >= ?1 GROUP BY day ORDER BY day",
+        )?;
+        let since_ts = fmt_ts(crate::vault::trunc_ms(since));
+        let rows = stmt.query_map(params![since_ts], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Per-author record counts and latest creation, most-active first.
+    pub fn author_activity(&self) -> Result<Vec<AuthorActivity>, CoreError> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT author, COUNT(*), \
+             SUM(CASE WHEN invalid_at IS NULL THEN 1 ELSE 0 END), MAX(created_at) \
+             FROM records GROUP BY author ORDER BY COUNT(*) DESC, author",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(AuthorActivity {
+                author: r.get(0)?,
+                records: r.get(1)?,
+                valid: r.get(2)?,
+                last_created: r.get(3)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     pub fn search(&self, query: &SearchQuery) -> Result<Vec<SearchHit>, CoreError> {

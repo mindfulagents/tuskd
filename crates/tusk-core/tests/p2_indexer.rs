@@ -330,3 +330,60 @@ fn watcher_tolerates_partial_writes() {
     }
     watcher.stop();
 }
+
+#[test]
+fn created_per_day_groups_and_respects_since() {
+    let (_dir, vault, indexer, clock) = setup();
+    let scope = Scope::parse("project:opentusk").unwrap();
+    // Day 1 (2026-01-01): two records. Day 3 (2026-01-03): one record.
+    for body in ["one", "two"] {
+        vault
+            .write(&vault.new_record(RecordType::Semantic, scope.clone(), "a1", body))
+            .unwrap();
+    }
+    clock.advance(Duration::days(2));
+    vault
+        .write(&vault.new_record(RecordType::Semantic, scope.clone(), "a1", "three"))
+        .unwrap();
+    indexer.rebuild(&vault).unwrap();
+
+    let all = indexer
+        .created_per_day(Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap())
+        .unwrap();
+    assert_eq!(
+        all,
+        vec![("2026-01-01".to_string(), 2), ("2026-01-03".to_string(), 1)]
+    );
+
+    // A later `since` excludes the first day entirely.
+    let tail = indexer
+        .created_per_day(Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap())
+        .unwrap();
+    assert_eq!(tail, vec![("2026-01-03".to_string(), 1)]);
+}
+
+#[test]
+fn author_activity_counts_and_orders() {
+    let (_dir, vault, indexer, clock) = setup();
+    let scope = Scope::parse("project:opentusk").unwrap();
+    for body in ["a", "b"] {
+        vault
+            .write(&vault.new_record(RecordType::Semantic, scope.clone(), "busy", body))
+            .unwrap();
+    }
+    clock.advance(Duration::seconds(60));
+    let mut solo = vault.new_record(RecordType::Semantic, scope.clone(), "quiet", "c");
+    solo.invalid_at = Some(vault.now());
+    vault.write(&solo).unwrap();
+    indexer.rebuild(&vault).unwrap();
+
+    let activity = indexer.author_activity().unwrap();
+    assert_eq!(activity.len(), 2);
+    assert_eq!(activity[0].author, "busy");
+    assert_eq!(activity[0].records, 2);
+    assert_eq!(activity[0].valid, 2);
+    assert_eq!(activity[1].author, "quiet");
+    assert_eq!(activity[1].records, 1);
+    assert_eq!(activity[1].valid, 0);
+    assert!(activity[1].last_created > activity[0].last_created);
+}
