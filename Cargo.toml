@@ -10,7 +10,7 @@ members = [
 version = "0.4.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/opentusk-ai/tuskd"
+repository = "https://github.com/mindfulagents/tuskd"
 
 [workspace.dependencies]
 tusk-core = { path = "crates/tusk-core" }
