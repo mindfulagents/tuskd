@@ -424,3 +424,73 @@ fn dashboard_housekeeping_and_command() {
         "stderr should mention the daemon"
     );
 }
+
+/// Overview aggregates: one round-trip serving the dashboard front page.
+#[test]
+fn dashboard_overview_aggregates() {
+    let dir = setup_vault();
+    let vault = dir.path();
+    let d = start_daemon(vault);
+    let base = &d.http;
+    let token = read_token_file(vault)["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let agent = api_admin_ok(
+        base,
+        &token,
+        json!({"cmd": "agent_create", "id": "scribe", "promote": ["org"]}),
+    );
+    let agent_token = agent["token"].as_str().unwrap().to_string();
+    mcp_call(
+        base,
+        &agent_token,
+        "memory_write",
+        json!({"content": "overview fact one: glockenspiel"}),
+    );
+    mcp_call(
+        base,
+        &agent_token,
+        "memory_write",
+        json!({"content": "overview fact two: vibraphone"}),
+    );
+    let queued = mcp_call(
+        base,
+        &agent_token,
+        "memory_promote",
+        json!({"content": "org fact: overview pending item", "target_scope": "org"}),
+    );
+    assert_eq!(queued["action"], "queued", "promote to org: {queued}");
+
+    let ov = api_admin_ok(base, &token, json!({"cmd": "overview"}));
+    // Zero-filled default window: 14 buckets, all writes in the window.
+    assert_eq!(ov["days"], 14, "overview: {ov}");
+    let activity = ov["activity"].as_array().unwrap();
+    assert_eq!(activity.len(), 14);
+    let total: i64 = activity.iter().map(|b| b[1].as_i64().unwrap()).sum();
+    assert_eq!(total, 2);
+    assert_eq!(activity.last().unwrap()[1], 2, "writes land today");
+    // Status fields ride along; review preview mirrors the queue.
+    assert_eq!(ov["index"]["total"], 2);
+    assert_eq!(ov["review_queue_depth"], 1);
+    assert_eq!(ov["review_preview"].as_array().unwrap().len(), 1);
+    assert_eq!(ov["agents"], 1);
+    // Recent records, newest first, and per-author aggregates.
+    let recent = ov["recent"].as_array().unwrap();
+    assert_eq!(recent.len(), 2);
+    assert!(recent[0]["snippet"]
+        .as_str()
+        .unwrap()
+        .contains("vibraphone"));
+    let authors = ov["authors"].as_array().unwrap();
+    assert_eq!(authors[0]["author"], "scribe");
+    assert_eq!(authors[0]["records"], 2);
+    assert_eq!(authors[0]["valid"], 2);
+
+    // The window parameter is honored and clamped.
+    let wide = api_admin_ok(base, &token, json!({"cmd": "overview", "days": 30}));
+    assert_eq!(wide["activity"].as_array().unwrap().len(), 30);
+    let clamped = api_admin_ok(base, &token, json!({"cmd": "overview", "days": 500}));
+    assert_eq!(clamped["activity"].as_array().unwrap().len(), 90);
+}

@@ -577,7 +577,7 @@ tuskd dashboard [--no-open]</code></pre>
     <p class="section-label">Reference</p>
     <h2>Web dashboard</h2>
     <div class="prose">
-      <p>While the daemon runs it serves an operator dashboard at <code>/ui</code> on the same loopback listener as <code>/mcp</code>: overview (index stats, review-queue depth, uptime), search with point-in-time <code>as of</code> queries, a memories browser (filter / inspect / forget), review-queue approve/reject, agent management, and housekeeping (index rebuild, graduation scan, vault export download, effective config).</p>
+      <p>While the daemon runs it serves an operator dashboard at <code>/ui</code> on the same loopback listener as <code>/mcp</code>: overview (KPI tiles, a memories-per-day activity chart, review-queue preview with inline approve/reject, recent memories, scope/type breakdowns), search with point-in-time <code>as of</code> queries, a memories browser (filter / inspect / forget), review-queue approve/reject, agent management, and housekeeping (index rebuild, graduation scan, vault export download, effective config).</p>
       <p>Auth is a per-run operator token (<code>tuskop_…</code>) minted at daemon start and written owner-only to <code>.tusk/admin-token</code>. <code>tuskd dashboard</code> prints the tokenized URL after checking the daemon is alive (<code>--no-open</code> to just print). The token travels in the <code>Authorization</code> header — no cookies — and agent tokens don't work on <code>/api/*</code>. Every dashboard action goes through the same admin plane as the CLI: the dashboard cannot bypass scopes, gates, or the single-writer rule.</p>
     </div>
     <div class="codeblock">

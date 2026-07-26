@@ -59,6 +59,56 @@
     letter-spacing: .14em; color: var(--faint);
   }
   .tile .value { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  a.tile { display: block; color: inherit; flex: 1; }
+  a.tile:hover { text-decoration: none; border-color: var(--accent-dim); }
+  .tile .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .tile.warn { border-color: var(--accent-dim); }
+  .tile.warn .value { color: var(--accent); }
+  .tile .spark { display: block; margin-top: 6px; }
+  .spark .line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+  .spark .fill { fill: var(--accent); opacity: .16; }
+  .meter {
+    height: 4px; border-radius: 2px; background: var(--border);
+    margin-top: 10px; overflow: hidden;
+  }
+  .meter i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+  .chart rect.bar { fill: var(--accent); }
+  .chart rect.bar.zero { fill: var(--border); }
+  .chart rect.hit { fill: transparent; }
+  .chart g:hover rect.bar { fill: var(--accent-dim); }
+  .chart g:hover rect.bar.zero { fill: var(--faint); }
+  .chart line.base { stroke: var(--border); }
+  #tip {
+    position: fixed; display: none; pointer-events: none; z-index: 20;
+    background: var(--nav-bg); border: 1px solid var(--border); border-radius: 7px;
+    padding: 5px 9px; font-size: 12px; white-space: nowrap;
+  }
+  #tip b { font-variant-numeric: tabular-nums; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 4px 10px; font-size: 12px; background: transparent; color: var(--muted); }
+  .seg button.on { background: rgba(220, 168, 94, 0.13); color: var(--accent); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .grid2 .card { margin-top: 0; }
+  .hbar { display: grid; grid-template-columns: 110px 1fr 44px; gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; }
+  .hbar .name { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hbar .track { height: 8px; border-radius: 2px; background: rgba(220, 168, 94, 0.10); overflow: hidden; }
+  .hbar .track i { display: block; height: 100%; background: var(--accent); border-radius: 2px; min-width: 2px; }
+  .hbar .n { font-family: var(--mono); font-size: 12px; text-align: right; color: var(--ink); }
+
+  .recent-item { padding: 8px 0; border-top: 1px solid var(--border); cursor: pointer; }
+  .recent-item:first-of-type { border-top: 0; }
+  .recent-item:hover { background: rgba(220, 168, 94, 0.05); }
+  .recent-item .snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .statusbar {
+    display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center;
+    margin-top: 14px; padding: 10px 4px 0; border-top: 1px solid var(--border);
+    color: var(--faint); font-size: 12px; font-family: var(--mono);
+  }
+  .statusbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: inline-block; margin-right: 6px; }
+  .statusbar .dot.off { background: var(--bad); }
 
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
@@ -134,6 +184,7 @@
     nav .brand { padding: 0 10px 0 0; }
     nav .brand small { display: none; }
     main { padding: 18px 16px; }
+    .grid2 { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -170,6 +221,7 @@
 </div>
 
 <div id="toast"></div>
+<div id="tip"></div>
 
 <script>
 "use strict";
@@ -321,36 +373,182 @@ function wireHits(page, detailSel, onChanged) {
 /* ---------- pages ---------- */
 let refreshTimer = null;
 
+/* Overview dashboard: KPI tiles, activity chart, attention + recent, breakdowns. */
+function sparkSvg(counts, w, h) {
+  const max = Math.max(1, ...counts);
+  const step = w / Math.max(1, counts.length - 1);
+  const pts = counts.map((n, i) => `${(i * step).toFixed(1)},${(h - 1 - (n / max) * (h - 3)).toFixed(1)}`);
+  return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true">
+    <polygon class="fill" points="0,${h} ${pts.join(" ")} ${w},${h}"/>
+    <polyline class="line" points="${pts.join(" ")}"/></svg>`;
+}
+function fmtDay(day) {
+  const d = new Date(day + "T00:00:00Z");
+  return isNaN(d) ? day : d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+}
+function activityChartSvg(activity, w, h) {
+  const pad = { l: 4, r: 4, t: 8, b: 6 };
+  const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+  const max = Math.max(1, ...activity.map(([, n]) => n));
+  const slot = iw / activity.length;
+  const bw = Math.max(3, slot - 2);
+  const cols = activity.map(([day, n], i) => {
+    const x = pad.l + i * slot + (slot - bw) / 2;
+    const bh = n > 0 ? Math.max(2, (n / max) * ih) : 2;
+    const y = pad.t + ih - bh;
+    return `<g data-day="${esc(day)}" data-n="${esc(n)}">
+      <rect class="bar${n > 0 ? "" : " zero"}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2"/>
+      <rect class="hit" x="${(pad.l + i * slot).toFixed(1)}" y="0" width="${slot.toFixed(1)}" height="${h}"/></g>`;
+  });
+  const first = activity[0], last = activity[activity.length - 1];
+  return `<svg class="chart" width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="memories created per day">
+    <line class="base" x1="${pad.l}" y1="${pad.t + ih + 0.5}" x2="${w - pad.r}" y2="${pad.t + ih + 0.5}"/>
+    ${cols.join("")}
+  </svg>
+  <div class="row" style="margin:2px 0 0; justify-content:space-between">
+    <span class="muted small mono">${first ? esc(fmtDay(first[0])) : ""}</span>
+    <span class="muted small mono">${last ? esc(fmtDay(last[0])) : ""}</span>
+  </div>`;
+}
+function wireChartTips(page) {
+  const tip = $("#tip");
+  page.querySelectorAll(".chart g").forEach(g => {
+    g.onmousemove = e => {
+      tip.innerHTML = `${esc(fmtDay(g.dataset.day))} — <b>${esc(g.dataset.n)}</b> new`;
+      tip.style.display = "block";
+      tip.style.left = Math.min(e.clientX + 12, window.innerWidth - tip.offsetWidth - 8) + "px";
+      tip.style.top = (e.clientY - 34) + "px";
+    };
+    g.onmouseleave = () => { tip.style.display = "none"; };
+  });
+}
+function hbars(pairs) {
+  if (!pairs.length) return '<p class="muted">empty vault</p>';
+  const max = Math.max(1, ...pairs.map(([, n]) => n));
+  return pairs.map(([name, n]) => `
+    <div class="hbar"><span class="name" title="${esc(name)}">${esc(name)}</span>
+      <span class="track"><i style="width:${(n / max * 100).toFixed(1)}%"></i></span>
+      <span class="n">${esc(n)}</span></div>`).join("");
+}
+
 async function pageOverview(page) {
+  let days = 14;
   async function load() {
-    const [meta, status] = await Promise.all([getJson("/api/meta"), admin("status")]);
-    const s = status.index;
+    // Don't clobber an armed confirm or an open record detail mid-interaction.
+    if ($(".armed", page) || $("#detail .card", page)) return;
+    const [meta, ov] = await Promise.all([getJson("/api/meta"), admin("overview", { days })]);
+    const s = ov.index;
+    const counts = ov.activity.map(([, n]) => n);
+    const last7 = counts.slice(-7).reduce((a, b) => a + b, 0);
+    const validPct = s.total ? Math.round(s.valid / s.total * 100) : 100;
+    const weekAgo = Date.now() - 7 * 86400e3;
+    const active7 = ov.authors.filter(a => new Date(a.last_created) >= weekAgo).length;
     page.innerHTML = `
       <h1>Overview</h1>
       <div class="tiles">
-        ${tile("records", s.total)}
-        ${tile("valid", s.valid)}
-        ${tile("review queue", status.review_queue_depth)}
-        ${tile("agents", status.agents)}
-        ${tile("uptime", uptime(meta.uptime_secs))}
+        <a class="tile" href="#/memories">
+          <div class="label">memories</div><div class="value">${esc(s.total)}</div>
+          <div class="sub">+${esc(last7)} last 7d</div>${sparkSvg(counts, 150, 26)}
+        </a>
+        <a class="tile" href="#/memories">
+          <div class="label">valid</div><div class="value">${esc(validPct)}%</div>
+          <div class="sub">${esc(s.valid)} of ${esc(s.total)} records</div>
+          <div class="meter"><i style="width:${validPct}%"></i></div>
+        </a>
+        <a class="tile${ov.review_queue_depth > 0 ? " warn" : ""}" href="#/review">
+          <div class="label">review queue</div><div class="value">${esc(ov.review_queue_depth)}</div>
+          <div class="sub">${ov.review_queue_depth > 0 ? "waiting for a decision" : "queue is clear"}</div>
+        </a>
+        <a class="tile" href="#/agents">
+          <div class="label">agents</div><div class="value">${esc(ov.agents)}</div>
+          <div class="sub">${esc(active7)} active last 7d</div>
+        </a>
       </div>
       <div class="card">
-        <dl class="kv">
-          <dt>version</dt><dd>tuskd ${esc(meta.version)}</dd>
-          <dt>vault</dt><dd class="mono small">${esc(meta.vault)}</dd>
-          <dt>graduation</dt><dd>scanner runs every ${esc(meta.graduation_interval_hours)}h</dd>
-        </dl>
+        <div class="row" style="margin-top:0">
+          <h2 style="margin:0">Activity</h2>
+          <span class="muted small">new memories per day</span>
+          <span style="flex:1"></span>
+          <span class="seg">
+            <button data-days="14" class="${days === 14 ? "on" : ""}">14d</button>
+            <button data-days="30" class="${days === 30 ? "on" : ""}">30d</button>
+          </span>
+        </div>
+        ${activityChartSvg(ov.activity, 720, 120)}
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="row" style="margin-top:0">
+            <h2 style="margin:0">Needs attention</h2>
+            <span style="flex:1"></span>
+            <a class="small" href="#/review">view all →</a>
+          </div>
+          <div id="attention">
+            ${ov.review_preview.length ? ov.review_preview.map(item => `
+              <div class="recent-item" data-qid="${esc(item.qid)}" style="cursor:default">
+                <div class="row" style="margin:0 0 4px">
+                  <span class="badge">${esc(item.candidate.kind ?? item.candidate.type ?? "")}</span>
+                  <span class="badge">${esc(String(item.candidate.scope))}</span>
+                  <span class="muted small">by ${esc(item.author)}</span>
+                  <span style="flex:1"></span>
+                  <button class="primary" data-approve>Approve</button>
+                  <button class="danger" data-reject>Reject</button>
+                </div>
+                <div class="snippet small muted">${esc(String(item.candidate.body ?? "").slice(0, 160))}</div>
+              </div>`).join("") : '<p class="muted">The review queue is empty — nothing needs you.</p>'}
+          </div>
+        </div>
+        <div class="card">
+          <div class="row" style="margin-top:0">
+            <h2 style="margin:0">Recent memories</h2>
+            <span style="flex:1"></span>
+            <a class="small" href="#/memories">browse →</a>
+          </div>
+          ${ov.recent.length ? ov.recent.map(r => `
+            <div class="recent-item" data-id="${esc(r.id)}">
+              <div class="snippet">${esc(r.snippet.slice(0, 90))}</div>
+              <div class="small muted">${esc(r.type)} · ${esc(r.scope)} · ${esc(r.author)} · ${esc(fmtDate(r.created_at))}
+                ${r.invalid_at ? ' <span class="badge bad">invalid</span>' : ""}</div>
+            </div>`).join("") : '<p class="muted">No memories yet — connect an agent and start writing.</p>'}
+        </div>
       </div>
       <div class="card">
-        <h2 style="margin-top:0">Records by scope</h2>
-        <table><thead><tr><th>scope</th><th>records</th></tr></thead><tbody>
-          ${s.by_scope.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="mono">${esc(n)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">empty vault</td></tr>'}
-        </tbody></table>
-        <h2>Records by type</h2>
-        <table><thead><tr><th>type</th><th>records</th></tr></thead><tbody>
-          ${s.by_type.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="mono">${esc(n)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">empty vault</td></tr>'}
-        </tbody></table>
+        <div class="grid2" style="margin-top:0">
+          <div><h2 style="margin-top:0">By scope</h2>${hbars(s.by_scope)}</div>
+          <div><h2 style="margin-top:0">By type</h2>${hbars(s.by_type)}</div>
+        </div>
+      </div>
+      <div id="detail"></div>
+      <div class="statusbar">
+        <span><span class="dot${ov.daemon ? "" : " off"}"></span>${ov.daemon ? "daemon" : "embedded"}</span>
+        <span>tuskd ${esc(meta.version)}</span>
+        <span title="${esc(meta.vault)}">${esc(meta.vault)}</span>
+        <span>up ${esc(uptime(meta.uptime_secs))}</span>
+        <span>graduation every ${esc(meta.graduation_interval_hours)}h</span>
       </div>`;
+    wireChartTips(page);
+    page.querySelectorAll(".seg button").forEach(btn => btn.onclick = () => {
+      days = +btn.dataset.days;
+      load().catch(err => toast(err.message, true));
+    });
+    page.querySelectorAll("[data-id].recent-item").forEach(el => el.onclick = async () => {
+      try { openDetail($("#detail", page), await admin("record_get", { id: el.dataset.id }), load); }
+      catch (err) { toast(err.message, true); }
+    });
+    $("#attention", page).querySelectorAll("[data-approve]").forEach(btn => btn.onclick = async () => {
+      try {
+        const out = await admin("review", { qid: btn.closest("[data-qid]").dataset.qid, approve: true });
+        toast("approved: " + (out.action || "ok") + (out.id ? " → " + out.id : ""));
+        load();
+      } catch (err) { toast(err.message, true); }
+    });
+    $("#attention", page).querySelectorAll("[data-reject]").forEach(btn => btn.onclick = () => armOrFire(btn, async () => {
+      try {
+        await admin("review", { qid: btn.closest("[data-qid]").dataset.qid, approve: false });
+        toast("rejected");
+        load();
+      } catch (err) { toast(err.message, true); }
+    }));
   }
   await load();
   refreshTimer = setInterval(() => load().catch(() => {}), 5000);
