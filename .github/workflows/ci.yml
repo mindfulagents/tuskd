@@ -1,0 +1,38 @@
+# The repo's quality gate (CLAUDE.md ground rules), run by robots on every
+# PR and push to main: fmt + clippy -D warnings + full test suite on the
+# primary target (aarch64-apple-darwin), plus the musl cross-check.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  gate:
+    name: fmt + clippy + test (macOS arm64)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  musl-check:
+    name: cargo check (x86_64-unknown-linux-musl)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --target x86_64-unknown-linux-musl
