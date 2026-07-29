@@ -14,3 +14,4 @@ pub mod platform;
 pub mod runtime;
 pub mod setup;
 pub mod stdio;
+pub mod sync;
