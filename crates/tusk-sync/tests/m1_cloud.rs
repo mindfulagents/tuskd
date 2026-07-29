@@ -252,3 +252,71 @@ fn tampered_op_fails_verification() {
     )
     .is_err());
 }
+
+#[test]
+fn presign_put_signs_the_body_and_parses_the_url() {
+    use tusk_sync::cloud::request_message_with_body;
+    let (base, rx) = one_shot_server(
+        "200 OK",
+        r#"{"url":"https://nyc3.example.invalid/bkt/repo/a.blob?X-Amz-Signature=x","expires_secs":300}"#,
+    );
+    let presigned = client(&base)
+        .presign_put("a.blob", 1024)
+        .expect("presign put");
+    assert_eq!(presigned.expires_secs, 300);
+    assert!(presigned.url.contains("X-Amz-Signature="));
+
+    let request = rx.recv().expect("captured request");
+    assert_eq!(
+        request.start_line,
+        format!("POST /v1/repos/{REPO}/blobs/presign HTTP/1.1")
+    );
+    let body: serde_json::Value = serde_json::from_slice(&request.body).expect("json body");
+    assert_eq!(body["op"], "put");
+    assert_eq!(body["name"], "a.blob");
+    assert_eq!(body["size_bytes"], 1024);
+
+    // Server-side verification: the signature covers this exact body.
+    let timestamp: i64 = request.header("x-tusk-timestamp").parse().expect("ts");
+    let signature = b64_decode(request.header("x-tusk-signature"));
+    key()
+        .verifying_key()
+        .verify(
+            &request_message_with_body(
+                "POST",
+                &format!("/v1/repos/{REPO}/blobs/presign"),
+                timestamp,
+                &request.body,
+            ),
+            &ed25519_dalek::Signature::from_bytes(
+                signature.as_slice().try_into().expect("64 bytes"),
+            ),
+        )
+        .expect("signed-body request signature verifies");
+}
+
+#[test]
+fn record_blob_posts_the_confirmation() {
+    let (base, rx) = one_shot_server("200 OK", r#"{"recorded":"a.blob"}"#);
+    client(&base).record_blob("a.blob", 11).expect("record");
+    let request = rx.recv().expect("captured request");
+    assert_eq!(
+        request.start_line,
+        format!("POST /v1/repos/{REPO}/blobs HTTP/1.1")
+    );
+    let body: serde_json::Value = serde_json::from_slice(&request.body).expect("json body");
+    assert_eq!(body["name"], "a.blob");
+    assert_eq!(body["size_bytes"], 11);
+}
+
+#[test]
+fn quota_rejection_surfaces_as_http_403() {
+    let (base, _rx) = one_shot_server("403 Forbidden", r#"{"error":"storage quota exceeded"}"#);
+    let err = client(&base)
+        .presign_put("big.blob", u64::MAX)
+        .expect_err("over quota");
+    match err {
+        tusk_sync::SyncError::Http { status, .. } => assert_eq!(status, 403),
+        other => panic!("expected Http error, got {other:?}"),
+    }
+}

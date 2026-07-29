@@ -223,3 +223,100 @@ fn unix_now() -> Result<i64, SyncError> {
         .map(|elapsed| elapsed.as_secs() as i64)
         .map_err(|_| SyncError::Storage("system clock before 1970".to_string()))
 }
+
+/// The message a device signs for a request with a body (tusk-cloud C7
+/// extension of the C4 scheme): the body hash binds the request content.
+pub fn request_message_with_body(method: &str, path: &str, timestamp: i64, body: &[u8]) -> Vec<u8> {
+    let digest = Sha256::digest(body);
+    format!(
+        "{REQ_DOMAIN}\n{method}\n{path}\n{timestamp}\n{}",
+        hex::encode(digest)
+    )
+    .into_bytes()
+}
+
+/// A presigned blob URL and its validity window.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresignedUrl {
+    pub url: String,
+    pub expires_secs: u64,
+}
+
+#[derive(Deserialize)]
+struct WirePresign {
+    url: String,
+    expires_secs: u64,
+}
+
+impl CloudClient {
+    /// POST `body` to `path` with C7 signed-body headers.
+    fn signed_post(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<reqwest::blocking::Response, SyncError> {
+        let url = format!("{}{path}", self.base_url);
+        let body_bytes = serde_json::to_vec(body)?;
+        let timestamp = unix_now()?;
+        let signature = self.key.sign(&request_message_with_body(
+            "POST",
+            path,
+            timestamp,
+            &body_bytes,
+        ));
+        let resp = self
+            .http
+            .post(&url)
+            .header("content-type", "application/json")
+            .header("x-tusk-device", &self.device_id)
+            .header("x-tusk-timestamp", timestamp.to_string())
+            .header("x-tusk-signature", B64.encode(signature.to_bytes()))
+            .body(body_bytes)
+            .send()
+            .map_err(|e| SyncError::Storage(format!("request to {url}: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(SyncError::Http {
+                status: resp.status().as_u16(),
+                url,
+            });
+        }
+        Ok(resp)
+    }
+
+    /// Presign an upload of `size_bytes` (quota is enforced server-side at
+    /// issuance; over-quota surfaces as `Http { status: 403 }`).
+    pub fn presign_put(&self, name: &str, size_bytes: u64) -> Result<PresignedUrl, SyncError> {
+        self.presign(serde_json::json!({
+            "op": "put", "name": name, "size_bytes": size_bytes,
+        }))
+    }
+
+    /// Presign a download of a registered blob (404 if unknown).
+    pub fn presign_get(&self, name: &str) -> Result<PresignedUrl, SyncError> {
+        self.presign(serde_json::json!({ "op": "get", "name": name }))
+    }
+
+    fn presign(&self, body: serde_json::Value) -> Result<PresignedUrl, SyncError> {
+        let path = format!("/v1/repos/{}/blobs/presign", self.repo_id);
+        let url = format!("{}{path}", self.base_url);
+        let parsed: WirePresign = self
+            .signed_post(&path, &body)?
+            .json()
+            .map_err(|e| SyncError::Storage(format!("response from {url}: {e}")))?;
+        Ok(PresignedUrl {
+            url: parsed.url,
+            expires_secs: parsed.expires_secs,
+        })
+    }
+
+    /// Confirm an upload into the control plane's blob registry so it
+    /// appears in listings and counts toward quota.
+    pub fn record_blob(&self, name: &str, size_bytes: u64) -> Result<(), SyncError> {
+        let path = format!("/v1/repos/{}/blobs", self.repo_id);
+        self.signed_post(
+            &path,
+            &serde_json::json!({ "name": name, "size_bytes": size_bytes }),
+        )?;
+        Ok(())
+    }
+}
