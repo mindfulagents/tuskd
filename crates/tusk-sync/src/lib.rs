@@ -7,8 +7,12 @@
 //! sees the opaque blobs these modules produce. No daemon wiring in this
 //! slice — the sync worker and admin verbs land in M1.
 
+pub mod crypto;
 pub mod error;
 pub mod provider;
+pub mod wrap;
 
+pub use crypto::{Dek, KeyTable, ObjectEntry, RepoMasterKey};
 pub use error::SyncError;
 pub use provider::{LocalProvider, StorageProvider};
+pub use wrap::DeviceWrap;
