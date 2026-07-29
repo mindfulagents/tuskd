@@ -2,10 +2,11 @@ use crate::clock::Clock;
 use crate::error::CoreError;
 use crate::record::{Record, RecordType};
 use crate::scope::Scope;
+use crate::sync::{self, Journal, OpKind};
 use chrono::{DateTime, TimeZone, Utc};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// Truncate to millisecond precision — the on-disk timestamp resolution.
 pub fn trunc_ms(t: DateTime<Utc>) -> DateTime<Utc> {
@@ -19,6 +20,9 @@ pub fn trunc_ms(t: DateTime<Utc>) -> DateTime<Utc> {
 pub struct VaultStore {
     root: PathBuf,
     clock: Arc<dyn Clock>,
+    /// When sync is enabled (D21), every mutation below also appends to the
+    /// hash-chained change journal. None (the default) = behavior unchanged.
+    journal: Mutex<Option<Arc<Journal>>>,
 }
 
 impl VaultStore {
@@ -32,7 +36,56 @@ impl VaultStore {
         // e.g. /var -> /private/var on macOS) compare against index paths.
         let root =
             fs::canonicalize(root).map_err(|e| CoreError::io(root.display().to_string(), e))?;
-        Ok(VaultStore { root, clock })
+        Ok(VaultStore {
+            root,
+            clock,
+            journal: Mutex::new(None),
+        })
+    }
+
+    /// Attach the sync change journal (D21). Mutations start journaling from
+    /// this point on; callers run `sync::reconcile` right after to catch up.
+    pub fn attach_journal(&self, journal: Arc<Journal>) {
+        let mut slot = match self.journal.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        *slot = Some(journal);
+    }
+
+    /// The attached journal, if sync is enabled.
+    pub fn journal(&self) -> Option<Arc<Journal>> {
+        match self.journal.lock() {
+            Ok(g) => g.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        }
+    }
+
+    /// Vault-relative path with `/` separators (journal + sync object paths).
+    pub fn rel_path(&self, path: &Path) -> Result<String, CoreError> {
+        let rel = path
+            .strip_prefix(&self.root)
+            .map_err(|_| CoreError::Other(format!("{} is outside the vault", path.display())))?;
+        Ok(rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/"))
+    }
+
+    /// Journal hook: no-op unless a journal is attached.
+    fn journal_op(
+        &self,
+        kind: OpKind,
+        path: &Path,
+        content: Option<&str>,
+    ) -> Result<(), CoreError> {
+        if let Some(journal) = self.journal() {
+            let rel = self.rel_path(path)?;
+            let hash = content.map(|c| sync::content_hash(c.as_bytes()));
+            journal.append(kind, &rel, hash.as_deref())?;
+        }
+        Ok(())
     }
 
     pub fn root(&self) -> &Path {
@@ -73,18 +126,27 @@ impl VaultStore {
     }
 
     /// Atomic write: temp file in the same directory, then rename, so the
-    /// watcher never sees a half-written record (build-loop §3.4).
+    /// watcher never sees a half-written record (build-loop §3.4). Journals
+    /// a `put` (full record state) when sync is enabled.
     pub fn write(&self, record: &Record) -> Result<PathBuf, CoreError> {
+        let (path, content) = self.write_file(record)?;
+        self.journal_op(OpKind::Put, &path, Some(&content))?;
+        Ok(path)
+    }
+
+    /// The atomic write itself, sans journaling; returns the written content
+    /// so journal hooks hash exactly the bytes on disk.
+    fn write_file(&self, record: &Record) -> Result<(PathBuf, String), CoreError> {
         let path = self.path_for(record);
         let dir = path
             .parent()
             .ok_or_else(|| CoreError::Other(format!("no parent for {}", path.display())))?;
         fs::create_dir_all(dir).map_err(|e| CoreError::io(dir.display().to_string(), e))?;
+        let content = record.to_markdown()?;
         let tmp = dir.join(format!(".{}.md.tmp", record.id));
-        fs::write(&tmp, record.to_markdown()?)
-            .map_err(|e| CoreError::io(tmp.display().to_string(), e))?;
+        fs::write(&tmp, &content).map_err(|e| CoreError::io(tmp.display().to_string(), e))?;
         fs::rename(&tmp, &path).map_err(|e| CoreError::io(path.display().to_string(), e))?;
-        Ok(path)
+        Ok((path, content))
     }
 
     pub fn load(&self, path: &Path) -> Result<Record, CoreError> {
@@ -150,10 +212,12 @@ impl VaultStore {
     }
 
     /// Set `invalid_at` on a record (bitemporal supersession; body untouched).
+    /// Journals a `patch` (metadata mutation) when sync is enabled.
     pub fn invalidate(&self, id: &str, at: DateTime<Utc>) -> Result<Record, CoreError> {
         let (_, mut rec) = self.get(id)?;
         rec.invalid_at = Some(trunc_ms(at));
-        self.write(&rec)?;
+        let (path, content) = self.write_file(&rec)?;
+        self.journal_op(OpKind::Patch, &path, Some(&content))?;
         Ok(rec)
     }
 
@@ -169,7 +233,7 @@ impl VaultStore {
     }
 
     /// Apply feedback telemetry: `uses += uses_delta`, `successes += success_delta`,
-    /// `last_used = at`.
+    /// `last_used = at`. Journals a `patch` when sync is enabled.
     pub fn update_telemetry(
         &self,
         id: &str,
@@ -181,14 +245,17 @@ impl VaultStore {
         rec.uses += uses_delta;
         rec.successes += success_delta;
         rec.last_used = Some(trunc_ms(at));
-        self.write(&rec)?;
+        let (path, content) = self.write_file(&rec)?;
+        self.journal_op(OpKind::Patch, &path, Some(&content))?;
         Ok(rec)
     }
 
-    /// Hard delete.
+    /// Hard delete. Journals a `tombstone` when sync is enabled — forget
+    /// never disappears without a trace (D21).
     pub fn forget(&self, id: &str) -> Result<(), CoreError> {
         let (path, _) = self.get(id)?;
         fs::remove_file(&path).map_err(|e| CoreError::io(path.display().to_string(), e))?;
+        self.journal_op(OpKind::Tombstone, &path, None)?;
         Ok(())
     }
 }

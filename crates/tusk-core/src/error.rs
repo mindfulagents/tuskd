@@ -37,6 +37,9 @@ pub enum CoreError {
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("sync journal: {0}")]
+    Journal(String),
+
     #[error("{0}")]
     Other(String),
 }

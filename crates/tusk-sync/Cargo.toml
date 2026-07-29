@@ -1,0 +1,28 @@
+[package]
+name = "tusk-sync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+rand.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+ed25519-dalek.workspace = true
+reqwest.workspace = true
+bip39.workspace = true
+chacha20poly1305.workspace = true
+hkdf.workspace = true
+hmac.workspace = true
+x25519-dalek.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tusk-core.workspace = true
+ulid.workspace = true
