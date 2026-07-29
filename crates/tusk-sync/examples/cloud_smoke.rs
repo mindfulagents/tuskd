@@ -48,5 +48,39 @@ fn main() {
 
     let blobs = client.list_blobs().expect("list blobs");
     println!("blob list ok ({} blobs)", blobs.len());
+
+    // Blob data path (C7): presign put -> raw HTTP PUT -> record -> presign
+    // get -> raw HTTP GET -> byte compare. Skips cleanly when the server
+    // has no blob store configured (503).
+    let payload = b"smoke-blob-payload";
+    match client.presign_put("smoke.blob", payload.len() as u64) {
+        Err(tusk_sync::SyncError::Http { status: 503, .. }) => {
+            println!("blob data path: SKIPPED (server has no blob store configured)");
+        }
+        Err(err) => panic!("presign put failed: {err}"),
+        Ok(put) => {
+            let http = reqwest::blocking::Client::new();
+            let resp = http
+                .put(&put.url)
+                .body(payload.to_vec())
+                .send()
+                .expect("PUT to store");
+            assert!(resp.status().is_success(), "PUT failed: {}", resp.status());
+            client
+                .record_blob("smoke.blob", payload.len() as u64)
+                .expect("record blob");
+            let listed = client.list_blobs().expect("list after record");
+            assert!(listed.iter().any(|name| name == "smoke.blob"));
+            let get = client.presign_get("smoke.blob").expect("presign get");
+            let bytes = http
+                .get(&get.url)
+                .send()
+                .expect("GET from store")
+                .bytes()
+                .expect("body");
+            assert_eq!(&bytes[..], payload, "downloaded bytes differ");
+            println!("blob data path: round-trip ok ({} bytes)", bytes.len());
+        }
+    }
     println!("cloud smoke: PASS");
 }
