@@ -248,6 +248,23 @@ hand-built on one machine or committed to git.
   `site/releases/latest.json` is frozen at v0.4.2 as a legacy artifact.
 - Homebrew tap and cargo-binstall channels remain open follow-ups.
 
+## D20 — Changelog + release announcements to Buzz (2026-07-26)
+
+Requested by arsy: release notes should reach the team's release-notes Buzz
+channel automatically on every release.
+
+- **`CHANGELOG.md`** (workspace root) is now the source of release notes.
+  cargo-dist auto-detects it and uses the matching `## v<V> — <date>` section
+  as the GitHub Release body (verified with `dist plan`). Update it in the
+  same PR as the version bump; seeded retroactively for v0.1.0–v0.5.0.
+- **`scripts/announce-release.sh [--dry-run] [<tag>]`** fetches a release's
+  notes via `gh release view` and posts them to the Buzz channel named by
+  `BUZZ_ANNOUNCE_CHANNEL` with the buzz CLI.
+- **Where it runs:** on a machine holding Buzz credentials (operator or the
+  team's agent), never in GitHub Actions — the repo is public and Nostr
+  private keys stay out of repo and CI secrets. The team agent (Fizz) watches
+  for new GitHub Releases and runs the script automatically; the script is
+  the manual fallback (`BUZZ_ANNOUNCE_CHANNEL=<uuid> scripts/announce-release.sh`).
 ## D21 — Sync & encryption model; M0 groundwork: identities + change journal (2026-07-29)
 
 Ratifies the sync design of `PLANS/HOT_CACHE_SYNC_PROPOSAL.md` (v2, approved
