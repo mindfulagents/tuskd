@@ -378,3 +378,27 @@ m0_spaces}.rs`: full two-device round trip through a provider (RMK recovered
 from the phrase *and* from a device wrap; byte-identical materialization),
 server-blindness audit, rotation-touches-only-the-key-table, ciphertext
 tamper, wrong AAD, phrase/otsk typo detection.
+
+## D23 — tusk-sync CloudClient: the C4 control-plane contract (2026-07-29)
+
+Client half of tusk-cloud's C4 signing contract (`crates/tusk-sync/src/cloud.rs`):
+
+- **Two signatures, two jobs.** Ops are signed with the device ed25519 key
+  over `"tusk-cloud.op.v1" LF repo_id LF hex(sha256(payload))` — the server
+  stores and re-serves the signature, so pullers verify authorship
+  end-to-end (`verify_op`) without trusting the control plane. Reads sign
+  `"tusk-cloud.req.v1" LF method LF path LF timestamp` into `x-tusk-*`
+  headers (path excludes the query string; server accepts ±300 s).
+- **Golden vectors pinned in both repos** (`tests/m1_cloud.rs` here,
+  `tests/c4_vectors.rs` in tusk-cloud): fixed seed key, repo id, payload →
+  exact signature bytes. A drift on either side fails a vector test before
+  the incompatibility ships. Never regenerate vectors to make a failing
+  test pass — that is a protocol version bump, not a bugfix.
+- **Server ids are opaque strings** client-side (server-issued lowercase
+  hyphenated UUIDs, passed through verbatim) — no uuid dep added; tuskd's
+  own identities remain ULIDs (D21).
+- **Blocking reqwest** like `SpacesProvider` (worker threads, not an async
+  runtime); the only client credential is the device key — no tokens or
+  shared secrets. Tests run against a hand-rolled single-shot HTTP server
+  (std TcpListener) that verifies every emitted signature server-side; no
+  mock-server dependency added.
