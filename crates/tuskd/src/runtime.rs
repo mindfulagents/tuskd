@@ -16,8 +16,9 @@ pub struct CoreHost {
 }
 
 impl CoreHost {
-    /// Acquire the vault lock, open the core, rebuild the index (D10), and
-    /// optionally start the watcher.
+    /// Acquire the vault lock, open the core, bring up sync state when
+    /// enabled (D20: identities + journal + reconciliation scan), rebuild
+    /// the index (D10), and optionally start the watcher.
     pub fn open(config: &Config, with_watcher: bool) -> Result<CoreHost, CoreError> {
         let lock = VaultLock::acquire(&config.vault)?;
         let ctx = Arc::new(TuskContext::open_with(
@@ -27,6 +28,9 @@ impl CoreHost {
             config.ranking,
             config.graduation,
         )?);
+        if config.sync_enabled {
+            crate::sync::enable(&ctx.vault)?;
+        }
         ctx.indexer.rebuild(&ctx.vault)?;
         let watcher = if with_watcher {
             Some(VaultWatcher::start(

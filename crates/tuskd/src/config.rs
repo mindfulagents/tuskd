@@ -17,6 +17,10 @@ pub struct Config {
     pub graduation: GraduationConfig,
     pub graduation_interval_hours: u64,
     pub ranking: RankingConfig,
+    /// `[sync] enabled` (D20). Off by default — sync groundwork (identities,
+    /// change journal) only activates when a user opts in; the full `[sync]`
+    /// section arrives with the networked worker (M1).
+    pub sync_enabled: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -29,6 +33,8 @@ struct FileConfig {
     graduation: FileGraduation,
     #[serde(default)]
     ranking: FileRanking,
+    #[serde(default)]
+    sync: FileSync,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -42,6 +48,11 @@ struct FileGraduation {
 struct FileRanking {
     uses_weight: Option<f64>,
     trust_weight: Option<f64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct FileSync {
+    enabled: Option<bool>,
 }
 
 /// Written by `tuskd init`.
@@ -62,6 +73,11 @@ interval_hours = 24
 [ranking]
 uses_weight = 0.3
 trust_weight = 0.2
+
+[sync]
+# Sync groundwork (M0): local change journal + identities only; no
+# networking. The full section lands with the sync worker.
+enabled = false
 "#;
 
 /// D7: --vault > $OPENTUSK_VAULT > ./.tusk > ./vault/.tusk > ".".
@@ -144,6 +160,7 @@ pub fn load(vault: &Path) -> Result<Config, CoreError> {
             uses_weight: file.ranking.uses_weight.unwrap_or(0.3),
             trust_weight: file.ranking.trust_weight.unwrap_or(0.2),
         },
+        sync_enabled: file.sync.enabled.unwrap_or(false),
     })
 }
 
