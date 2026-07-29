@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/tusk-core",
     "crates/tusk-mcp",
+    "crates/tusk-sync",
     "crates/tuskd",
 ]
 
@@ -15,6 +16,7 @@ repository = "https://github.com/mindfulagents/tuskd"
 [workspace.dependencies]
 tusk-core = { path = "crates/tusk-core" }
 tusk-mcp = { path = "crates/tusk-mcp" }
+tusk-sync = { path = "crates/tusk-sync" }
 tuskd = { path = "crates/tuskd" }
 
 thiserror = "2"
@@ -40,7 +42,13 @@ tar = "0.4"
 flate2 = "1"
 tempfile = "3"
 proptest = "1"
-reqwest = { version = "0.12", default-features = false, features = ["json", "blocking"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
+bip39 = "2"
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+zeroize = { version = "1", features = ["derive"] }
 
 [profile.release]
 lto = true
