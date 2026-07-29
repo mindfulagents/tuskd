@@ -11,6 +11,7 @@ pub mod index;
 pub mod keyring;
 pub mod record;
 pub mod scope;
+pub mod sync;
 pub mod vault;
 pub mod watch;
 
