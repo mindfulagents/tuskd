@@ -1,4 +1,4 @@
-//! Sync groundwork wiring (M0, D20): identities + journal, enabled only when
+//! Sync groundwork wiring (M0, D21): identities + journal, enabled only when
 //! `[sync] enabled = true` in tuskd.toml. Local-only — no networking here.
 
 use std::sync::Arc;

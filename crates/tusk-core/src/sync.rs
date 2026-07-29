@@ -1,4 +1,4 @@
-//! Sync groundwork (M0, HOT_CACHE_SYNC_PROPOSAL §6 items 1–2; DECISIONS D20):
+//! Sync groundwork (M0, HOT_CACHE_SYNC_PROPOSAL §6 items 1–2; DECISIONS D21):
 //! vault/device identity and the append-only, hash-chained change journal.
 //! Local-only — no networking, no crypto beyond identity keys.
 

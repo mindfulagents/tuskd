@@ -1,4 +1,4 @@
-//! M0 sync groundwork — tuskd wiring tests (D20): config flag off by
+//! M0 sync groundwork — tuskd wiring tests (D21): config flag off by
 //! default, identity persistence across CoreHost opens, 0600 device key,
 //! reconciliation on reopen, export exclusion. Temp-dir vaults only; no
 //! daemon, no ports.

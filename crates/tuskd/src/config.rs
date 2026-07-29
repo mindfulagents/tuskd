@@ -17,7 +17,7 @@ pub struct Config {
     pub graduation: GraduationConfig,
     pub graduation_interval_hours: u64,
     pub ranking: RankingConfig,
-    /// `[sync] enabled` (D20). Off by default — sync groundwork (identities,
+    /// `[sync] enabled` (D21). Off by default — sync groundwork (identities,
     /// change journal) only activates when a user opts in; the full `[sync]`
     /// section arrives with the networked worker (M1).
     pub sync_enabled: bool,

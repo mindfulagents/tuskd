@@ -12,7 +12,7 @@ use tusk_core::error::CoreError;
 /// the daemon's per-run operator token, agent private signing keys
 /// (D17 — secrets never travel in archives; applies to import too as
 /// defense in depth against hand-crafted archives), and device-local sync
-/// state (D20 — `.tusk/sync/` holds the device private key plus a journal
+/// state (D21 — `.tusk/sync/` holds the device private key plus a journal
 /// and identity that belong to this install; a restored vault re-derives
 /// its journal via the reconciliation scan).
 fn skip(rel: &Path) -> bool {

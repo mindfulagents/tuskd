@@ -17,7 +17,7 @@ pub struct CoreHost {
 
 impl CoreHost {
     /// Acquire the vault lock, open the core, bring up sync state when
-    /// enabled (D20: identities + journal + reconciliation scan), rebuild
+    /// enabled (D21: identities + journal + reconciliation scan), rebuild
     /// the index (D10), and optionally start the watcher.
     pub fn open(config: &Config, with_watcher: bool) -> Result<CoreHost, CoreError> {
         let lock = VaultLock::acquire(&config.vault)?;

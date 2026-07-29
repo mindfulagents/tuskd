@@ -20,7 +20,7 @@ pub fn trunc_ms(t: DateTime<Utc>) -> DateTime<Utc> {
 pub struct VaultStore {
     root: PathBuf,
     clock: Arc<dyn Clock>,
-    /// When sync is enabled (D20), every mutation below also appends to the
+    /// When sync is enabled (D21), every mutation below also appends to the
     /// hash-chained change journal. None (the default) = behavior unchanged.
     journal: Mutex<Option<Arc<Journal>>>,
 }
@@ -43,7 +43,7 @@ impl VaultStore {
         })
     }
 
-    /// Attach the sync change journal (D20). Mutations start journaling from
+    /// Attach the sync change journal (D21). Mutations start journaling from
     /// this point on; callers run `sync::reconcile` right after to catch up.
     pub fn attach_journal(&self, journal: Arc<Journal>) {
         let mut slot = match self.journal.lock() {
@@ -251,7 +251,7 @@ impl VaultStore {
     }
 
     /// Hard delete. Journals a `tombstone` when sync is enabled — forget
-    /// never disappears without a trace (D20).
+    /// never disappears without a trace (D21).
     pub fn forget(&self, id: &str) -> Result<(), CoreError> {
         let (path, _) = self.get(id)?;
         fs::remove_file(&path).map_err(|e| CoreError::io(path.display().to_string(), e))?;

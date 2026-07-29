@@ -1,4 +1,4 @@
-//! M0 sync groundwork exit tests (HOT_CACHE_SYNC_PROPOSAL §6 items 1–2, D20):
+//! M0 sync groundwork exit tests (HOT_CACHE_SYNC_PROPOSAL §6 items 1–2, D21):
 //! journal append + hash chain, tombstone on forget, reconciliation after
 //! offline edits, identity persistence. Temp-dir scratch vaults only.
 
