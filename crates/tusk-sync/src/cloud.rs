@@ -309,6 +309,31 @@ impl CloudClient {
         })
     }
 
+    /// Tombstone a blob in the registry: it leaves listings and stops
+    /// counting toward quota (C7 addendum; the stored object is reconciled
+    /// later server-side). Signed like a read, over DELETE + path.
+    pub fn delete_blob(&self, name: &str) -> Result<(), SyncError> {
+        let path = format!("/v1/repos/{}/blobs/{name}", self.repo_id);
+        let url = format!("{}{path}", self.base_url);
+        let timestamp = unix_now()?;
+        let signature = self.key.sign(&request_message("DELETE", &path, timestamp));
+        let resp = self
+            .http
+            .delete(&url)
+            .header("x-tusk-device", &self.device_id)
+            .header("x-tusk-timestamp", timestamp.to_string())
+            .header("x-tusk-signature", B64.encode(signature.to_bytes()))
+            .send()
+            .map_err(|e| SyncError::Storage(format!("request to {url}: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(SyncError::Http {
+                status: resp.status().as_u16(),
+                url,
+            });
+        }
+        Ok(())
+    }
+
     /// Confirm an upload into the control plane's blob registry so it
     /// appears in listings and counts toward quota.
     pub fn record_blob(&self, name: &str, size_bytes: u64) -> Result<(), SyncError> {
@@ -318,5 +343,78 @@ impl CloudClient {
             &serde_json::json!({ "name": name, "size_bytes": size_bytes }),
         )?;
         Ok(())
+    }
+}
+
+/// `StorageProvider` over the tusk-cloud control plane (D24): puts and gets
+/// flow through short-lived presigned URLs (the client never holds bucket
+/// credentials), the listing is the control-plane JSON array (D22), and
+/// delete is the registry tombstone. Composes directly with the M0 crypto
+/// pipeline — see the `m0_roundtrip` push/pull shape.
+pub struct CloudProvider {
+    client: CloudClient,
+    http: reqwest::blocking::Client,
+}
+
+impl CloudProvider {
+    pub fn new(client: CloudClient) -> Result<CloudProvider, SyncError> {
+        let http = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(120))
+            .build()
+            .map_err(|e| SyncError::Storage(format!("http client: {e}")))?;
+        Ok(CloudProvider { client, http })
+    }
+}
+
+impl crate::provider::StorageProvider for CloudProvider {
+    fn put(&self, name: &str, bytes: &[u8]) -> Result<(), SyncError> {
+        crate::provider::validate_name(name)?;
+        let presigned = self.client.presign_put(name, bytes.len() as u64)?;
+        let resp = self
+            .http
+            .put(&presigned.url)
+            .body(bytes.to_vec())
+            .send()
+            .map_err(|e| SyncError::Storage(format!("blob PUT {name}: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(SyncError::Http {
+                status: resp.status().as_u16(),
+                url: presigned.url,
+            });
+        }
+        self.client.record_blob(name, bytes.len() as u64)
+    }
+
+    fn get(&self, name: &str) -> Result<Vec<u8>, SyncError> {
+        crate::provider::validate_name(name)?;
+        let presigned = match self.client.presign_get(name) {
+            Err(SyncError::Http { status: 404, .. }) => {
+                return Err(SyncError::NotFound(name.to_string()))
+            }
+            other => other?,
+        };
+        let resp = self
+            .http
+            .get(&presigned.url)
+            .send()
+            .map_err(|e| SyncError::Storage(format!("blob GET {name}: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(SyncError::Http {
+                status: resp.status().as_u16(),
+                url: presigned.url,
+            });
+        }
+        resp.bytes()
+            .map(|bytes| bytes.to_vec())
+            .map_err(|e| SyncError::Storage(format!("blob GET {name} body: {e}")))
+    }
+
+    fn delete(&self, name: &str) -> Result<(), SyncError> {
+        crate::provider::validate_name(name)?;
+        self.client.delete_blob(name)
+    }
+
+    fn list(&self) -> Result<Vec<String>, SyncError> {
+        self.client.list_blobs()
     }
 }

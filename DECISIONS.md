@@ -419,3 +419,26 @@ Client half of tusk-cloud's C4 signing contract (`crates/tusk-sync/src/cloud.rs`
   shared secrets. Tests run against a hand-rolled single-shot HTTP server
   (std TcpListener) that verifies every emitted signature server-side; no
   mock-server dependency added.
+
+## D24 — CloudProvider: the M0 pipeline over tusk-cloud (2026-07-29)
+
+`crates/tusk-sync/src/cloud.rs` gains `CloudProvider`, a `StorageProvider`
+over `CloudClient`, closing the loop between the M0 crypto pipeline and the
+live control plane:
+
+- **put** = presign (quota enforced server-side at issuance) → raw HTTP PUT
+  → record; **get** = presign → GET (404 → `NotFound`); **list** = the
+  control-plane JSON array (D22); **delete** = registry tombstone
+  (tusk-cloud C7 addendum — the stored object is reconciled server-side
+  later, and delete stays idempotent per the trait contract).
+- No new trait surface: the M0 `push_all`/`pull_all` shape works unchanged
+  — verified by `examples/cloud_vault_roundtrip.rs`, which ran the full M0
+  exit test against a real tusk-cloud + S3 store: encrypt under a fresh
+  RMK, push, **server-blindness audit at rest** (hex-only names, no
+  plaintext windows in stored bytes), recover the RMK from the phrase and
+  from a device wrap, pull byte-identical, tombstone cleanup. PASS
+  2026-07-29 against the full local stack (tusk-cloud + Postgres + minio).
+- Limit, stated plainly: one device key authenticates both simulated
+  installs — true multi-device auth waits on the tusk-cloud
+  device-approval endpoints, which are the next server slice and the last
+  gap before the real two-machine M1 exit test.
