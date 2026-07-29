@@ -306,3 +306,75 @@ of `skills/**` / review queue / policies (VaultStore mutations cover
 `memory/**` today, matching the watcher's scope), journal compaction, and
 op signing with the device key. Coverage:
 `crates/tusk-core/tests/m0_sync.rs`, `crates/tuskd/tests/m0_sync.rs`.
+
+## D22 — tusk-sync: blocking StorageProvider + client-side crypto layer (2026-07-29)
+
+M0 slice 2 of `PLANS/HOT_CACHE_SYNC_PROPOSAL.md` (§4 encryption design, §6
+items 3–4): the new workspace crate `crates/tusk-sync` (MIT/Apache like the
+other client crates), holding the storage abstraction and every cryptographic
+primitive the sync service uses. No daemon wiring — tusk-core/tuskd are
+untouched this slice; the worker, admin verbs, and `[sync]` networking
+config come in M1.
+
+**Provider trait is blocking (sync), not async.** Every vault/journal seam
+in tusk-core is synchronous `std::fs`; tokio exists in the tree only inside
+the tuskd daemon's admin plane, and the M1 sync worker will run on its own
+thread (graduation-timer pattern, D6) where blocking I/O is the natural
+shape. `reqwest` (blocking) was already a workspace dependency — this slice
+adds only its `rustls-tls` feature (pure-Rust TLS; the dep previously had no
+TLS backend at all). `StorageProvider: Send + Sync` exposes
+`put/get/delete/list` of opaque named blobs with S3-compatible semantics
+(idempotent delete, atomic-overwrite put, sorted list). Two impls:
+
+- `LocalProvider` — one file per blob under a root dir, tmp+rename writes
+  (tests, offline).
+- `SpacesProvider<S: PresignSource>` — bare HTTP verbs against presigned
+  URLs handed to it per operation. It holds **no credentials and signs
+  nothing**; M1's tusk-cloud is the only party with bucket keys and issues
+  the presigns (quota enforcement lives there too). `list` expects a JSON
+  array from a control-plane URL — tusk-cloud tracks blobs in its oplog, so
+  the client never parses S3 `ListObjectsV2` XML. Tested against a
+  hand-rolled local HTTP server on an ephemeral port.
+
+**Crypto (proposal §4), new deps all pure-Rust RustCrypto/dalek:**
+`chacha20poly1305 0.10` (XChaCha20-Poly1305), `hkdf 0.12` + `hmac 0.12`
+(SHA-256, already in tree), `x25519-dalek 2` (`static_secrets`), `bip39 2`,
+`zeroize 1` (derive).
+
+- **RMK** = 32 random bytes (`OsRng`). User-facing **Repo Secret Key** in
+  two round-tripping forms: a BIP39 English 24-word phrase (built-in 8-bit
+  checksum + wordlist catch typos; parse is case/whitespace-insensitive) and
+  a compact `otsk_<64-hex-key><8-hex-sha256-checksum>` string.
+- **Subkey discipline:** the raw RMK is never used by two algorithms;
+  HKDF-SHA256 subkeys with distinct `info` strings serve key-table wrapping
+  and blob naming (a deliberate refinement of the proposal's literal
+  `HMAC(RMK, rel_path)` — same property, cleaner domain separation).
+- **Per-object DEKs:** random 32 bytes; content sealed with
+  XChaCha20-Poly1305 (random 24-byte nonce prepended), `AAD = repo_id ‖ 0x00
+  ‖ rel_path`, so a blob decrypts only for the repo and path it was written
+  for (wrong-AAD and tamper tests pin this).
+- **Key table:** `rel_path → {blob name, DEK}` (JSON), sealed under the
+  RMK's key-table subkey as the `manifest` blob. The blob *name* is recorded
+  in the table at first write, which is what makes **rotation cheap**: a new
+  RMK re-seals the small table and nothing else — no blob is renamed or
+  re-encrypted (test-proven), old RMKs can't open the rotated table, and
+  post-rotation objects get names under the new RMK.
+- **Blob naming:** HMAC-SHA256 of the vault-relative path under the RMK's
+  naming subkey, hex — deterministic (overwrites reuse the slot) and
+  structure-blind. Server-blindness test audits everything at rest: names
+  are opaque hex, stored bytes contain no plaintext/path substrings.
+- **Device wraps:** the RMK sealed to a device via ephemeral-static X25519
+  ECDH from the slice-1 ed25519 identity (dalek `to_scalar_bytes` /
+  `to_montgomery`, the standard birational map), wrap key =
+  `HKDF(shared, info ‖ eph_pub ‖ device_pub)`, XChaCha20-Poly1305 with
+  `AAD = repo_id`, contributory-DH check on both sides. The serialized wrap
+  is safe to relay through the untrusted server.
+- **Zeroization:** RMK and DEK zeroize on drop (matching the repo's effort
+  level — PEMs elsewhere are plain strings); `Debug` on the RMK never prints
+  key material.
+
+Exit shape covered by `crates/tusk-sync/tests/{m0_crypto,m0_roundtrip,
+m0_spaces}.rs`: full two-device round trip through a provider (RMK recovered
+from the phrase *and* from a device wrap; byte-identical materialization),
+server-blindness audit, rotation-touches-only-the-key-table, ciphertext
+tamper, wrong AAD, phrase/otsk typo detection.
