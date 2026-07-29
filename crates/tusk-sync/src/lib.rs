@@ -10,9 +10,11 @@
 pub mod crypto;
 pub mod error;
 pub mod provider;
+pub mod spaces;
 pub mod wrap;
 
 pub use crypto::{Dek, KeyTable, ObjectEntry, RepoMasterKey};
 pub use error::SyncError;
 pub use provider::{LocalProvider, StorageProvider};
+pub use spaces::{BlobOp, PresignSource, SpacesProvider};
 pub use wrap::DeviceWrap;
