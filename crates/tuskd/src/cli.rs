@@ -69,6 +69,11 @@ pub enum Command {
     },
     /// Run the graduation scanner once
     Graduate,
+    /// Cloud sync (M1): connect, approve devices, push/pull the encrypted vault
+    Sync {
+        #[command(subcommand)]
+        command: SyncCommand,
+    },
     /// Print (and open) the web dashboard URL for the running daemon
     Dashboard {
         /// Print the URL only; don't open a browser
@@ -172,4 +177,50 @@ pub enum ReviewCommand {
     Approve { qid: String },
     /// Reject a queued item
     Reject { qid: String },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SyncCommand {
+    /// Enroll this vault as a new device of an existing cloud repo
+    Connect {
+        /// tusk-cloud base URL, e.g. https://cloud.opentusk.ai
+        #[arg(long)]
+        url: String,
+        /// Repo id to join
+        #[arg(long)]
+        repo: String,
+        /// Device display name (defaults to hostname)
+        #[arg(long)]
+        name: Option<String>,
+        /// 24-word recovery phrase (skips waiting for a device approval)
+        #[arg(long)]
+        phrase: Option<String>,
+    },
+    /// Beta: create account + repo + this device in one call (admin token)
+    Bootstrap {
+        #[arg(long)]
+        url: String,
+        #[arg(long)]
+        admin_token: String,
+        #[arg(long)]
+        email: String,
+        #[arg(long)]
+        repo_name: String,
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Show connection, fingerprint, and approval status
+    Status,
+    /// List this repo's devices with fingerprints
+    Devices,
+    /// Approve a pending device (fingerprint must match its screen)
+    Approve {
+        device_id: String,
+        #[arg(long)]
+        fingerprint: String,
+    },
+    /// Encrypt and upload the vault snapshot
+    Push,
+    /// Download and materialize the vault snapshot
+    Pull,
 }

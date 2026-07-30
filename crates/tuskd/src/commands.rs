@@ -133,6 +133,7 @@ fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> 
             }
             Ok(())
         }
+        Command::Sync { command } => sync_command(vault, command),
         Command::Dashboard { no_open } => dashboard(vault, no_open),
         Command::Agent { command } => agent_command(vault, command),
         Command::Export { archive } => {
@@ -405,4 +406,34 @@ fn admin_over_uds(stream: UnixStream, req: &AdminRequest) -> Result<Value, CoreE
     let resp: AdminResponse = serde_json::from_str(line.trim())
         .map_err(|e| CoreError::Other(format!("bad admin response: {e}")))?;
     resp.into_result()
+}
+
+fn sync_command(
+    vault: &std::path::Path,
+    command: crate::cli::SyncCommand,
+) -> Result<(), CoreError> {
+    use crate::cli::SyncCommand;
+    match command {
+        SyncCommand::Connect {
+            url,
+            repo,
+            name,
+            phrase,
+        } => crate::sync_cloud::connect(vault, &url, &repo, name, phrase),
+        SyncCommand::Bootstrap {
+            url,
+            admin_token,
+            email,
+            repo_name,
+            name,
+        } => crate::sync_cloud::bootstrap(vault, &url, &admin_token, &email, &repo_name, name),
+        SyncCommand::Status => crate::sync_cloud::status(vault),
+        SyncCommand::Devices => crate::sync_cloud::devices(vault),
+        SyncCommand::Approve {
+            device_id,
+            fingerprint,
+        } => crate::sync_cloud::approve(vault, &device_id, &fingerprint),
+        SyncCommand::Push => crate::sync_cloud::push(vault),
+        SyncCommand::Pull => crate::sync_cloud::pull(vault),
+    }
 }

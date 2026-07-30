@@ -15,7 +15,7 @@ use tusk_core::error::CoreError;
 /// state (D21 — `.tusk/sync/` holds the device private key plus a journal
 /// and identity that belong to this install; a restored vault re-derives
 /// its journal via the reconciliation scan).
-fn skip(rel: &Path) -> bool {
+pub(crate) fn skip(rel: &Path) -> bool {
     let name = rel.file_name().and_then(|n| n.to_str()).unwrap_or("");
     name.starts_with("index.db")
         || name == "lock"
