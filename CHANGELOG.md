@@ -5,6 +5,25 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## v0.6.0 — 2026-07-30
+
+- **Cloud sync (M1, D21–D27):** end-to-end-encrypted vault sync through
+  tusk-cloud (cloud.opentusk.ai). New `tuskd sync` verbs:
+  `bootstrap` (create a repo; prints the 24-word recovery phrase once),
+  `connect` (enroll this machine as a new device), `status`, `devices`,
+  `approve <id> --fingerprint <fp>` (fingerprint-gated device approval),
+  `revoke <id>` (one-command revoke + key rotation), `push`, and `pull`.
+- **Ciphertext-blind by construction:** every object is encrypted on-device
+  under a per-repo master key with per-object DEKs; blob names are opaque
+  HMACs; the server stores only public keys, opaque wraps, and ciphertext.
+  Op authorship is ed25519-signed and verifiable end-to-end by any device.
+- **Key custody:** the recovery phrase or an approved device's wrap are the
+  only ways into a repo. Revocation rotates the repo key, re-issues wraps
+  to remaining devices, and re-keys blob names on the next push. Devices
+  self-heal from their own wrap after rotations performed elsewhere.
+- The sync file set is exactly the `tuskd export` file set: private keys,
+  sync state, and derived runtime files never leave the machine.
+
 ## v0.5.0 — 2026-07-26
 
 - **Real release builds (D19):** cargo-dist pipeline publishing tarballs for
