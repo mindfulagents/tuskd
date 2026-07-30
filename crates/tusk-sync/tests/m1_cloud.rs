@@ -320,3 +320,79 @@ fn quota_rejection_surfaces_as_http_403() {
         other => panic!("expected Http error, got {other:?}"),
     }
 }
+
+#[test]
+fn c8_fingerprint_matches_pinned_vector() {
+    // Pinned in tusk-cloud tests/c4_vectors.rs as well.
+    assert_eq!(
+        tusk_sync::device_fingerprint(&key().verifying_key().to_bytes()),
+        "fe812c12f3ab4ce6"
+    );
+}
+
+#[test]
+fn enroll_posts_keys_and_parses_ids() {
+    let (base, rx) = one_shot_server(
+        "200 OK",
+        r#"{"device_id":"b0e42fe7-31a5-4894-a441-bf1e30cbd7d2","fingerprint":"fe812c12f3ab4ce6","status":"pending"}"#,
+    );
+    let (device_id, fingerprint) = tusk_sync::enroll_device(
+        &base,
+        REPO,
+        "laptop-b",
+        &key().verifying_key().to_bytes(),
+        &[9u8; 32],
+    )
+    .expect("enroll");
+    assert_eq!(device_id, DEVICE);
+    assert_eq!(fingerprint, "fe812c12f3ab4ce6");
+
+    let request = rx.recv().expect("captured request");
+    assert_eq!(
+        request.start_line,
+        format!("POST /v1/repos/{REPO}/devices/enroll HTTP/1.1")
+    );
+    let body: serde_json::Value = serde_json::from_slice(&request.body).expect("json");
+    assert_eq!(body["name"], "laptop-b");
+    assert_eq!(
+        b64_decode(body["ed25519_pubkey"].as_str().expect("key")),
+        key().verifying_key().to_bytes()
+    );
+}
+
+#[test]
+fn approve_signs_the_wrap_relay_and_fetch_wrap_round_trips() {
+    use tusk_sync::cloud::request_message_with_body;
+    let (base, rx) = one_shot_server("200 OK", r#"{"approved":"x"}"#);
+    client(&base)
+        .approve_device("b0e42fe7-31a5-4894-a441-bf1e30cbd7d2", b"opaque-wrap", 1)
+        .expect("approve");
+    let request = rx.recv().expect("captured request");
+    let path = format!("/v1/repos/{REPO}/devices/b0e42fe7-31a5-4894-a441-bf1e30cbd7d2/approve");
+    assert_eq!(request.start_line, format!("POST {path} HTTP/1.1"));
+    let timestamp: i64 = request.header("x-tusk-timestamp").parse().expect("ts");
+    let signature = b64_decode(request.header("x-tusk-signature"));
+    key()
+        .verifying_key()
+        .verify(
+            &request_message_with_body("POST", &path, timestamp, &request.body),
+            &ed25519_dalek::Signature::from_bytes(
+                signature.as_slice().try_into().expect("64 bytes"),
+            ),
+        )
+        .expect("approve signature verifies");
+    let body: serde_json::Value = serde_json::from_slice(&request.body).expect("json");
+    assert_eq!(
+        b64_decode(body["wrap"].as_str().expect("wrap")),
+        b"opaque-wrap"
+    );
+
+    use base64::Engine;
+    let wrap_b64 = base64::engine::general_purpose::STANDARD.encode(b"my-wrap-bytes");
+    let response: &'static str =
+        Box::leak(format!(r#"{{"wrap":"{wrap_b64}","rmk_generation":3}}"#).into_boxed_str());
+    let (base, _rx) = one_shot_server("200 OK", response);
+    let (wrap, generation) = client(&base).fetch_wrap().expect("fetch wrap");
+    assert_eq!(wrap, b"my-wrap-bytes");
+    assert_eq!(generation, 3);
+}

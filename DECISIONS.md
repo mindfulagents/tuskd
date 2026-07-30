@@ -442,3 +442,22 @@ live control plane:
   installs — true multi-device auth waits on the tusk-cloud
   device-approval endpoints, which are the next server slice and the last
   gap before the real two-machine M1 exit test.
+
+## D25 — Device enrollment/approval client + the two-device flow (2026-07-30)
+
+Client half of tusk-cloud C8 (`cloud.rs`): `enroll_device` (pre-client
+free function — no device id exists yet), `list_devices`,
+`approve_device` (relays the opaque serialized `DeviceWrap`), `fetch_wrap`
+(403-until-approved doubles as the approval poll), and
+`device_fingerprint` (first 8 bytes of sha256(pubkey), hex — vector
+pinned in both repos).
+
+`examples/two_device_sync.rs` is the M1 exit-test flow with two real
+device identities: A pushes an encrypted vault; B generates its own
+keypair, enrolls, and is refused while pending; A checks B's fingerprint,
+rebuilds B's public PEM from the listed raw bytes (the server never
+handles PEMs), wraps the RMK on-device, approves; B fetches + unwraps its
+wrap locally and pulls the vault byte-identical authenticated as itself;
+B appends an op that A pulls and signature-verifies. PASS 2026-07-30
+against the full local stack. What remains for the literal exit test is
+running this on two physical machines and the revoke→rotate pass.

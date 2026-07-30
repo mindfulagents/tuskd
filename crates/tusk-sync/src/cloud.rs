@@ -418,3 +418,114 @@ impl crate::provider::StorageProvider for CloudProvider {
         self.client.list_blobs()
     }
 }
+
+/// Human-checkable device fingerprint (tusk-cloud C8): first 8 bytes of
+/// sha256(ed25519 pubkey), hex — 16 chars both ends render identically
+/// for the out-of-band approval check.
+pub fn device_fingerprint(ed25519_pubkey: &[u8]) -> String {
+    hex::encode(&Sha256::digest(ed25519_pubkey)[..8])
+}
+
+/// A device as listed by the control plane (public material only).
+#[derive(Debug, Clone, Deserialize)]
+pub struct WireDevice {
+    pub device_id: String,
+    pub name: String,
+    pub status: String,
+    pub ed25519_pubkey: String,
+    pub x25519_pubkey: String,
+    pub fingerprint: String,
+}
+
+#[derive(Deserialize)]
+struct EnrollResponse {
+    device_id: String,
+    fingerprint: String,
+}
+
+#[derive(Deserialize)]
+struct WrapResponse {
+    wrap: String,
+    rmk_generation: i32,
+}
+
+/// Enroll a new (pending) device — the pre-client step: it happens before
+/// a `CloudClient` exists because the server has not issued a device id
+/// yet. Returns `(device_id, fingerprint)`; the caller should display the
+/// fingerprint and confirm it matches what the approving side sees.
+pub fn enroll_device(
+    base_url: &str,
+    repo_id: &str,
+    name: &str,
+    ed25519_pubkey: &[u8; 32],
+    x25519_pubkey: &[u8; 32],
+) -> Result<(String, String), SyncError> {
+    let base_url = base_url.trim_end_matches('/');
+    let url = format!("{base_url}/v1/repos/{repo_id}/devices/enroll");
+    let http = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| SyncError::Storage(format!("http client: {e}")))?;
+    let resp = http
+        .post(&url)
+        .json(&serde_json::json!({
+            "name": name,
+            "ed25519_pubkey": B64.encode(ed25519_pubkey),
+            "x25519_pubkey": B64.encode(x25519_pubkey),
+        }))
+        .send()
+        .map_err(|e| SyncError::Storage(format!("request to {url}: {e}")))?;
+    if !resp.status().is_success() {
+        return Err(SyncError::Http {
+            status: resp.status().as_u16(),
+            url,
+        });
+    }
+    let parsed: EnrollResponse = resp
+        .json()
+        .map_err(|e| SyncError::Storage(format!("response from {url}: {e}")))?;
+    Ok((parsed.device_id, parsed.fingerprint))
+}
+
+impl CloudClient {
+    /// All devices of the repo, for the approval UI/CLI.
+    pub fn list_devices(&self) -> Result<Vec<WireDevice>, SyncError> {
+        let path = format!("/v1/repos/{}/devices", self.repo_id);
+        let url = format!("{}{path}", self.base_url);
+        let resp = self.signed_get(&url, &path)?;
+        resp.json()
+            .map_err(|e| SyncError::Storage(format!("response from {url}: {e}")))
+    }
+
+    /// Approve a pending device, relaying the opaque RMK wrap produced
+    /// on this device (`wrap_rmk_for_device`, serialized).
+    pub fn approve_device(
+        &self,
+        device_id: &str,
+        wrap: &[u8],
+        rmk_generation: i32,
+    ) -> Result<(), SyncError> {
+        let path = format!("/v1/repos/{}/devices/{device_id}/approve", self.repo_id);
+        self.signed_post(
+            &path,
+            &serde_json::json!({
+                "wrap": B64.encode(wrap),
+                "rmk_generation": rmk_generation,
+            }),
+        )?;
+        Ok(())
+    }
+
+    /// This device's own latest-generation RMK wrap. 403 until approved
+    /// (the natural "am I approved yet" poll), 404 if approved without a
+    /// wrap on record.
+    pub fn fetch_wrap(&self) -> Result<(Vec<u8>, i32), SyncError> {
+        let path = format!("/v1/repos/{}/wrap", self.repo_id);
+        let url = format!("{}{path}", self.base_url);
+        let resp = self.signed_get(&url, &path)?;
+        let parsed: WrapResponse = resp
+            .json()
+            .map_err(|e| SyncError::Storage(format!("response from {url}: {e}")))?;
+        Ok((decode_b64(&parsed.wrap)?, parsed.rmk_generation))
+    }
+}
