@@ -2166,8 +2166,10 @@ name = "tuskd"
 version = "0.5.0"
 dependencies = [
  "axum",
+ "base64",
  "chrono",
  "clap",
+ "ed25519-dalek",
  "flate2",
  "fs2",
  "hex",
@@ -2184,6 +2186,7 @@ dependencies = [
  "toml_edit",
  "tusk-core",
  "tusk-mcp",
+ "tusk-sync",
 ]
 
 [[package]]

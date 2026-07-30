@@ -461,3 +461,31 @@ wrap locally and pulls the vault byte-identical authenticated as itself;
 B appends an op that A pulls and signature-verifies. PASS 2026-07-30
 against the full local stack. What remains for the literal exit test is
 running this on two physical machines and the revoke→rotate pass.
+
+## D26 — `tuskd sync` CLI verbs: the M1 flow in the shipping binary (2026-07-30)
+
+Additive CLI (D16-18 precedent): `tuskd sync
+bootstrap|connect|status|devices|approve|push|pull` in
+`crates/tuskd/src/sync_cloud.rs`, orchestrating the proven tusk-sync
+pieces (D23-D25). Decisions:
+
+- **State in `.tusk/sync/`** (0700, export- and sync-excluded):
+  `cloud.json` (url + repo/device ids), the D21 `device.pem` (shared with
+  the journal groundwork), and `rmk.otsk` — the Repo Master Key in its
+  compact `otsk_` form, same custody effort level as the device PEMs.
+- **Sync file set = the `tuskd export` file set** (archive.rs `skip`):
+  one already-decided boundary, no second list to drift. Keyring keys,
+  sync state, index, and runtime files never leave the machine.
+- **Approve requires `--fingerprint`** matching the server-listed value —
+  no `--force`; the out-of-band check is the security story.
+- **RMK acquisition is lazy**: `rmk.otsk` if present, else fetch this
+  device's wrap and unwrap locally (persisting the result); a pending
+  device gets a clear "not approved yet" error.
+- **v1 snapshot semantics:** `push` re-encrypts the full set (deterministic
+  HMAC names → overwrites reuse slots) and tombstones stale 64-hex names;
+  `pull` materializes additively (no local deletions). Incremental
+  journal-driven sync + the daemon worker are the next slice (D27).
+- **Verified live** with the real binary against cloud.opentusk.ai:
+  bootstrap → push (3 encrypted files) → second vault connect (pending) →
+  fingerprint-gated approve → wrap recovery → pull → `diff -r` clean; a
+  wrong fingerprint is refused with instructions not to approve.
