@@ -489,3 +489,28 @@ pieces (D23-D25). Decisions:
   bootstrap → push (3 encrypted files) → second vault connect (pending) →
   fingerprint-gated approve → wrap recovery → pull → `diff -r` clean; a
   wrong fingerprint is refused with instructions not to approve.
+
+## D27 — `tuskd sync revoke` + stale-key self-healing (2026-07-30)
+
+Client half of tusk-cloud C9, closing the revoke→rotate M1 exit criterion:
+
+- **`tuskd sync revoke <device>`** does the whole ceremony in one command:
+  server revoke (generation bump) → new RMK generated locally → key table
+  re-sealed under it (blobs untouched, D22) → wraps re-issued for every
+  remaining approved device at the new generation → the new recovery
+  phrase printed once (the old phrase is dead).
+- **`current_rmk` staleness guard** (replacing the naive local read): the
+  local key is trusted only if it still opens the server manifest;
+  otherwise the device refreshes from its own wrap and persists. This is
+  what lets *other* devices survive a rotation they didn't perform — and
+  what stops a stale device from clobbering a rotated manifest on push.
+  Generation labels (`rmk.gen` sidecar) are wrap bookkeeping; correctness
+  rides on the manifest-open check, never on the label.
+- **Post-rotation pushes re-key names**: the v1 snapshot push derives all
+  blob names under the current RMK, so the first push after a rotation
+  also tombstones every blob name the revoked device knew. Defense in
+  depth on top of the E2E-inherent "old pulled data is theirs" limit.
+- **Verified end-to-end** against the full local stack: B approved and
+  syncing → revoked → immediate 403 lockout; A pushes post-rotation
+  content; C enrolls, is approved at generation 2, pulls everything
+  byte-identical.

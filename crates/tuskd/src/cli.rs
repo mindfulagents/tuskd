@@ -219,6 +219,8 @@ pub enum SyncCommand {
         #[arg(long)]
         fingerprint: String,
     },
+    /// Revoke a device and rotate the repo key (new phrase printed once)
+    Revoke { device_id: String },
     /// Encrypt and upload the vault snapshot
     Push,
     /// Download and materialize the vault snapshot
