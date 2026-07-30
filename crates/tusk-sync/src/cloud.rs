@@ -529,3 +529,56 @@ impl CloudClient {
         Ok((decode_b64(&parsed.wrap)?, parsed.rmk_generation))
     }
 }
+
+#[derive(Deserialize)]
+struct RevokeResponse {
+    rmk_generation: i32,
+}
+
+impl CloudClient {
+    /// Revoke another device (tusk-cloud C9). Returns the new RMK
+    /// generation; the caller must then rotate: generate a new RMK,
+    /// re-seal the key table, and re-issue wraps at that generation.
+    pub fn revoke_device(&self, device_id: &str) -> Result<i32, SyncError> {
+        let path = format!("/v1/repos/{}/devices/{device_id}/revoke", self.repo_id);
+        let url = format!("{}{path}", self.base_url);
+        let timestamp = unix_now()?;
+        let signature = self.key.sign(&request_message("POST", &path, timestamp));
+        let resp = self
+            .http
+            .post(&url)
+            .header("x-tusk-device", &self.device_id)
+            .header("x-tusk-timestamp", timestamp.to_string())
+            .header("x-tusk-signature", B64.encode(signature.to_bytes()))
+            .send()
+            .map_err(|e| SyncError::Storage(format!("request to {url}: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(SyncError::Http {
+                status: resp.status().as_u16(),
+                url,
+            });
+        }
+        let parsed: RevokeResponse = resp
+            .json()
+            .map_err(|e| SyncError::Storage(format!("response from {url}: {e}")))?;
+        Ok(parsed.rmk_generation)
+    }
+
+    /// Push a rotation re-wrap for a remaining approved device (C9).
+    pub fn push_wrap(
+        &self,
+        device_id: &str,
+        wrap: &[u8],
+        rmk_generation: i32,
+    ) -> Result<(), SyncError> {
+        let path = format!("/v1/repos/{}/devices/{device_id}/wrap", self.repo_id);
+        self.signed_post(
+            &path,
+            &serde_json::json!({
+                "wrap": B64.encode(wrap),
+                "rmk_generation": rmk_generation,
+            }),
+        )?;
+        Ok(())
+    }
+}

@@ -433,6 +433,7 @@ fn sync_command(
             device_id,
             fingerprint,
         } => crate::sync_cloud::approve(vault, &device_id, &fingerprint),
+        SyncCommand::Revoke { device_id } => crate::sync_cloud::revoke(vault, &device_id),
         SyncCommand::Push => crate::sync_cloud::push(vault),
         SyncCommand::Pull => crate::sync_cloud::pull(vault),
     }

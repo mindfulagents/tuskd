@@ -89,17 +89,32 @@ fn client(vault: &Path) -> Result<(CloudClient, CloudConfig), CoreError> {
     Ok((client, config))
 }
 
-/// The RMK: from `rmk.hex` if present, else fetched as this device's wrap
-/// and unwrapped locally (then persisted). Errors while still pending.
-fn load_rmk(vault: &Path, cloud: &CloudClient) -> Result<RepoMasterKey, CoreError> {
-    let path = sync_dir(vault).join(RMK_FILE);
-    if path.exists() {
-        let raw = std::fs::read_to_string(&path).map_err(|e| io(&path, e))?;
-        return RepoMasterKey::from_otsk(raw.trim()).map_err(err);
-    }
-    let (wrap_bytes, _generation) = cloud.fetch_wrap().map_err(|e| match e {
+const RMK_GEN_FILE: &str = "rmk.gen";
+
+fn load_local_rmk(vault: &Path) -> Option<(RepoMasterKey, i32)> {
+    let raw = std::fs::read_to_string(sync_dir(vault).join(RMK_FILE)).ok()?;
+    let rmk = RepoMasterKey::from_otsk(raw.trim()).ok()?;
+    let generation = std::fs::read_to_string(sync_dir(vault).join(RMK_GEN_FILE))
+        .ok()
+        .and_then(|g| g.trim().parse().ok())
+        .unwrap_or(1);
+    Some((rmk, generation))
+}
+
+fn store_rmk(vault: &Path, rmk: &RepoMasterKey, generation: i32) -> Result<(), CoreError> {
+    crate::platform::write_private(&sync_dir(vault).join(RMK_FILE), &rmk.to_otsk())?;
+    crate::platform::write_private(&sync_dir(vault).join(RMK_GEN_FILE), &generation.to_string())
+}
+
+/// Fetch this device's wrap and unwrap it locally.
+fn rmk_from_own_wrap(
+    vault: &Path,
+    cloud: &CloudClient,
+    repo_id: &str,
+) -> Result<(RepoMasterKey, i32), CoreError> {
+    let (wrap_bytes, generation) = cloud.fetch_wrap().map_err(|e| match e {
         SyncError::Http { status: 403, .. } => CoreError::Other(
-            "this device is not approved yet — approve it from another device".into(),
+            "this device is not approved (or has been revoked) — check `tuskd sync status`".into(),
         ),
         other => err(other),
     })?;
@@ -107,16 +122,47 @@ fn load_rmk(vault: &Path, cloud: &CloudClient) -> Result<RepoMasterKey, CoreErro
         .map_err(|e| CoreError::Other(format!("bad wrap from server: {e}")))?;
     let key_path = sync_dir(vault).join(tusk_core::sync::DEVICE_KEY_FILE);
     let private_pem = std::fs::read_to_string(&key_path).map_err(|e| io(&key_path, e))?;
-    let config = load_config(vault)?;
-    let rmk = unwrap_rmk_for_device(&wrap, &config.repo_id, &private_pem).map_err(err)?;
-    store_rmk(vault, &rmk)?;
-    println!("recovered repo key from this device's wrap");
-    Ok(rmk)
+    let rmk = unwrap_rmk_for_device(&wrap, repo_id, &private_pem).map_err(err)?;
+    Ok((rmk, generation))
 }
 
-fn store_rmk(vault: &Path, rmk: &RepoMasterKey) -> Result<(), CoreError> {
-    let path = sync_dir(vault).join(RMK_FILE);
-    crate::platform::write_private(&path, &rmk.to_otsk())
+/// The *current* RMK: the local copy if it still opens the server manifest,
+/// else refreshed from this device's own wrap (covering rotations performed
+/// elsewhere), persisted on refresh. Generation labels are bookkeeping for
+/// wraps; correctness rides on the manifest-open check.
+fn current_rmk(
+    vault: &Path,
+    cloud: &CloudClient,
+    provider: &CloudProvider,
+    repo_id: &str,
+) -> Result<(RepoMasterKey, i32), CoreError> {
+    let sealed = match provider.get(MANIFEST) {
+        Ok(sealed) => Some(sealed),
+        Err(SyncError::NotFound(_)) => None,
+        Err(e) => return Err(err(e)),
+    };
+    if let Some((rmk, generation)) = load_local_rmk(vault) {
+        match &sealed {
+            None => return Ok((rmk, generation)),
+            Some(sealed) if KeyTable::open(sealed, &rmk, repo_id).is_ok() => {
+                return Ok((rmk, generation))
+            }
+            Some(_) => println!("local repo key is stale (rotated elsewhere?) — refreshing"),
+        }
+    }
+    let (rmk, generation) = rmk_from_own_wrap(vault, cloud, repo_id)?;
+    if let Some(sealed) = &sealed {
+        KeyTable::open(sealed, &rmk, repo_id).map_err(|_| {
+            CoreError::Other(
+                "this device's wrap does not open the current manifest — a rotation may be \
+                 in progress; retry shortly"
+                    .into(),
+            )
+        })?;
+    }
+    store_rmk(vault, &rmk, generation)?;
+    println!("recovered repo key from this device's wrap (generation {generation})");
+    Ok((rmk, generation))
 }
 
 fn device_keys_raw(key: &SigningKey) -> ([u8; 32], [u8; 32]) {
@@ -159,7 +205,7 @@ pub fn connect(
     )?;
     if let Some(phrase) = phrase {
         let rmk = RepoMasterKey::from_mnemonic(&phrase).map_err(err)?;
-        store_rmk(vault, &rmk)?;
+        store_rmk(vault, &rmk, 1)?;
         println!("repo key recovered from phrase and stored");
     }
     println!("enrolled as device {device_id} (pending)");
@@ -224,7 +270,7 @@ pub fn bootstrap(
         },
     )?;
     let rmk = RepoMasterKey::generate();
-    store_rmk(vault, &rmk)?;
+    store_rmk(vault, &rmk, 1)?;
     println!("repo created: {}", ids.repo_id);
     println!();
     println!("RECOVERY PHRASE — write this down; it is shown exactly once:");
@@ -292,7 +338,9 @@ pub fn devices(vault: &Path) -> Result<(), CoreError> {
 /// whole security story here; there is no --force).
 pub fn approve(vault: &Path, device_id: &str, fingerprint: &str) -> Result<(), CoreError> {
     let (cloud, config) = client(vault)?;
-    let rmk = load_rmk(vault, &cloud)?;
+    let (cloud2, _) = client(vault)?;
+    let provider = CloudProvider::new(cloud2).map_err(err)?;
+    let (rmk, generation) = current_rmk(vault, &cloud, &provider, &config.repo_id)?;
     let devices = cloud.list_devices().map_err(err)?;
     let target = devices
         .iter()
@@ -325,7 +373,7 @@ pub fn approve(vault: &Path, device_id: &str, fingerprint: &str) -> Result<(), C
     let wrap_bytes =
         serde_json::to_vec(&wrap).map_err(|e| CoreError::Other(format!("serialize wrap: {e}")))?;
     cloud
-        .approve_device(device_id, &wrap_bytes, 1)
+        .approve_device(device_id, &wrap_bytes, generation)
         .map_err(err)?;
     println!("approved {device_id} ({})", target.name);
     Ok(())
@@ -367,9 +415,9 @@ fn vault_files(vault: &Path) -> Result<Vec<(String, PathBuf)>, CoreError> {
 /// `tuskd sync push` — encrypt and upload the vault snapshot.
 pub fn push(vault: &Path) -> Result<(), CoreError> {
     let (cloud, config) = client(vault)?;
-    let rmk = load_rmk(vault, &cloud)?;
     let (cloud2, _) = client(vault)?;
     let provider = CloudProvider::new(cloud2).map_err(err)?;
+    let (rmk, _generation) = current_rmk(vault, &cloud, &provider, &config.repo_id)?;
 
     let files = vault_files(vault)?;
     let mut table = KeyTable::new();
@@ -410,9 +458,9 @@ pub fn push(vault: &Path) -> Result<(), CoreError> {
 /// in the manifest are left alone).
 pub fn pull(vault: &Path) -> Result<(), CoreError> {
     let (cloud, config) = client(vault)?;
-    let rmk = load_rmk(vault, &cloud)?;
     let (cloud2, _) = client(vault)?;
     let provider = CloudProvider::new(cloud2).map_err(err)?;
+    let (rmk, _generation) = current_rmk(vault, &cloud, &provider, &config.repo_id)?;
 
     let sealed = provider.get(MANIFEST).map_err(|e| match e {
         SyncError::NotFound(_) => CoreError::Other("nothing pushed yet (no manifest)".into()),
@@ -435,5 +483,77 @@ pub fn pull(vault: &Path) -> Result<(), CoreError> {
         written.insert(rel.clone(), plaintext.len());
     }
     println!("pulled {} files", written.len());
+    Ok(())
+}
+
+/// `tuskd sync revoke <device>` — revoke a device and complete the
+/// rotation in one command (C9/D27): server bumps the RMK generation, then
+/// this device generates a new RMK, re-seals the (unchanged) key table
+/// under it — no blob is renamed or re-encrypted (D22 rotation) — and
+/// re-issues wraps for every remaining approved device. Prints the new
+/// recovery phrase once; the old phrase and the revoked device's key are
+/// dead from this point for all future data.
+pub fn revoke(vault: &Path, device_id: &str) -> Result<(), CoreError> {
+    let (cloud, config) = client(vault)?;
+    let (cloud2, _) = client(vault)?;
+    let provider = CloudProvider::new(cloud2).map_err(err)?;
+    let (rmk_old, _) = current_rmk(vault, &cloud, &provider, &config.repo_id)?;
+
+    // Open the manifest with the old key BEFORE revoking, so a failure
+    // here leaves everything untouched.
+    let table = match provider.get(MANIFEST) {
+        Ok(sealed) => Some(KeyTable::open(&sealed, &rmk_old, &config.repo_id).map_err(err)?),
+        Err(SyncError::NotFound(_)) => None,
+        Err(e) => return Err(err(e)),
+    };
+
+    let generation = cloud.revoke_device(device_id).map_err(|e| match e {
+        SyncError::Http { status: 409, .. } => {
+            CoreError::Other("device is already revoked (or unknown)".into())
+        }
+        other => err(other),
+    })?;
+
+    // Rotate: new RMK, re-seal, persist locally, re-wrap the survivors.
+    let rmk_new = RepoMasterKey::generate();
+    if let Some(table) = table {
+        provider
+            .put(
+                MANIFEST,
+                &table.seal(&rmk_new, &config.repo_id).map_err(err)?,
+            )
+            .map_err(err)?;
+    }
+    store_rmk(vault, &rmk_new, generation)?;
+
+    let mut rewrapped = 0usize;
+    for device in cloud.list_devices().map_err(err)? {
+        if device.status != "approved" || device.device_id == config.device_id {
+            continue;
+        }
+        use base64::Engine;
+        let raw: [u8; 32] = base64::engine::general_purpose::STANDARD
+            .decode(&device.ed25519_pubkey)
+            .map_err(|e| CoreError::Other(format!("bad listed pubkey: {e}")))?
+            .try_into()
+            .map_err(|_| CoreError::Other("listed pubkey is not 32 bytes".into()))?;
+        let pem = VerifyingKey::from_bytes(&raw)
+            .map_err(|e| CoreError::Other(format!("listed pubkey invalid: {e}")))?
+            .to_public_key_pem(LineEnding::LF)
+            .map_err(|e| CoreError::Other(format!("pem encode: {e}")))?;
+        let wrap = wrap_rmk_for_device(&rmk_new, &config.repo_id, &pem).map_err(err)?;
+        let wrap_bytes = serde_json::to_vec(&wrap)
+            .map_err(|e| CoreError::Other(format!("serialize wrap: {e}")))?;
+        cloud
+            .push_wrap(&device.device_id, &wrap_bytes, generation)
+            .map_err(err)?;
+        rewrapped += 1;
+    }
+
+    println!("revoked {device_id}; rotated to generation {generation}");
+    println!("re-wrapped the repo key for {rewrapped} remaining device(s)");
+    println!();
+    println!("NEW RECOVERY PHRASE — the old one is now useless; write this down:");
+    println!("  {}", rmk_new.to_mnemonic().map_err(err)?);
     Ok(())
 }
