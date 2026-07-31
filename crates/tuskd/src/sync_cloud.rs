@@ -7,25 +7,24 @@
 //! key, shared with the journal groundwork), and `rmk.hex` (the Repo
 //! Master Key — same custody effort level as the device PEMs, D22).
 //!
-//! v1 sync semantics (D26): `push` snapshots the exportable vault (exactly
-//! the `tuskd export` file set) — deterministic blob names mean overwrites
-//! reuse slots and stale names are tombstoned; `pull` materializes the
-//! manifest additively (no local deletions). Incremental journal-driven
-//! sync is the follow-up worker slice.
+//! Sync semantics (D26, revised by D28): the file set is exactly the
+//! `tuskd export` file set; `push` is the worker's incremental path
+//! (scan-vs-state diff, stable blob slots, oplog announcement) and `pull`
+//! materializes the manifest additively (no local deletions). The daemon
+//! runs the same cycle automatically — see `sync_worker`.
 
 use ed25519_dalek::pkcs8::{spki::der::pem::LineEnding, DecodePrivateKey, EncodePublicKey};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tusk_core::error::CoreError;
 use tusk_sync::crypto::{KeyTable, RepoMasterKey};
 use tusk_sync::wrap::{unwrap_rmk_for_device, wrap_rmk_for_device};
 use tusk_sync::{CloudClient, CloudProvider, StorageProvider, SyncError};
 
-const CLOUD_CONFIG_FILE: &str = "cloud.json";
+pub(crate) const CLOUD_CONFIG_FILE: &str = "cloud.json";
 const RMK_FILE: &str = "rmk.otsk";
-const MANIFEST: &str = "manifest";
+pub(crate) const MANIFEST: &str = "manifest";
 
 /// Persistent connection settings, `.tusk/sync/cloud.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,7 +34,7 @@ pub struct CloudConfig {
     pub device_id: String,
 }
 
-fn err(e: SyncError) -> CoreError {
+pub(crate) fn err(e: SyncError) -> CoreError {
     CoreError::Other(format!("sync: {e}"))
 }
 
@@ -43,7 +42,7 @@ fn io(path: &Path, e: std::io::Error) -> CoreError {
     CoreError::io(path.display().to_string(), e)
 }
 
-fn sync_dir(vault: &Path) -> PathBuf {
+pub(crate) fn sync_dir(vault: &Path) -> PathBuf {
     vault.join(".tusk").join("sync")
 }
 
@@ -81,7 +80,7 @@ fn ensure_device_key(vault: &Path) -> Result<SigningKey, CoreError> {
         .map_err(|e| CoreError::Other(format!("device key: {e}")))
 }
 
-fn client(vault: &Path) -> Result<(CloudClient, CloudConfig), CoreError> {
+pub(crate) fn client(vault: &Path) -> Result<(CloudClient, CloudConfig), CoreError> {
     let config = load_config(vault)?;
     let key = ensure_device_key(vault)?;
     let client =
@@ -130,7 +129,7 @@ fn rmk_from_own_wrap(
 /// else refreshed from this device's own wrap (covering rotations performed
 /// elsewhere), persisted on refresh. Generation labels are bookkeeping for
 /// wraps; correctness rides on the manifest-open check.
-fn current_rmk(
+pub(crate) fn current_rmk(
     vault: &Path,
     cloud: &CloudClient,
     provider: &CloudProvider,
@@ -380,7 +379,7 @@ pub fn approve(vault: &Path, device_id: &str, fingerprint: &str) -> Result<(), C
 }
 
 /// The sync file set: exactly what `tuskd export` archives.
-fn vault_files(vault: &Path) -> Result<Vec<(String, PathBuf)>, CoreError> {
+pub(crate) fn vault_files(vault: &Path) -> Result<Vec<(String, PathBuf)>, CoreError> {
     let mut out = Vec::new();
     let mut stack = vec![vault.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -412,77 +411,27 @@ fn vault_files(vault: &Path) -> Result<Vec<(String, PathBuf)>, CoreError> {
     Ok(out)
 }
 
-/// `tuskd sync push` — encrypt and upload the vault snapshot.
+/// `tuskd sync push` — upload local changes (D28: the worker's incremental
+/// push path; on a never-synced vault this uploads every local file while
+/// leaving remote-only files untouched).
 pub fn push(vault: &Path) -> Result<(), CoreError> {
-    let (cloud, config) = client(vault)?;
-    let (cloud2, _) = client(vault)?;
-    let provider = CloudProvider::new(cloud2).map_err(err)?;
-    let (rmk, _generation) = current_rmk(vault, &cloud, &provider, &config.repo_id)?;
-
-    let files = vault_files(vault)?;
-    let mut table = KeyTable::new();
-    for (rel, path) in &files {
-        let plaintext = std::fs::read(path).map_err(|e| io(path, e))?;
-        let entry = table.entry(&rmk, rel).map_err(err)?;
-        let blob = entry
-            .dek()
-            .map_err(err)?
-            .encrypt(&config.repo_id, rel, &plaintext)
-            .map_err(err)?;
-        provider.put(&entry.blob, &blob).map_err(err)?;
+    let report = crate::sync_worker::push_only(vault)?;
+    if report.pushed == 0 && report.deleted_remote == 0 {
+        println!("already in sync — nothing to push");
+    } else {
+        println!(
+            "pushed {} encrypted file(s), tombstoned {} stale blob(s)",
+            report.pushed, report.deleted_remote
+        );
     }
-    provider
-        .put(MANIFEST, &table.seal(&rmk, &config.repo_id).map_err(err)?)
-        .map_err(err)?;
-
-    // Tombstone snapshot blobs that no longer exist (deterministic names:
-    // only 64-hex names are ours to manage; the manifest stays).
-    let live: std::collections::BTreeSet<String> =
-        table.iter().map(|(_, e)| e.blob.clone()).collect();
-    let mut removed = 0usize;
-    for name in provider.list().map_err(err)? {
-        if name.len() == 64 && name.chars().all(|c| c.is_ascii_hexdigit()) && !live.contains(&name)
-        {
-            provider.delete(&name).map_err(err)?;
-            removed += 1;
-        }
-    }
-    println!(
-        "pushed {} encrypted files (+manifest), removed {removed} stale blobs",
-        files.len()
-    );
     Ok(())
 }
 
-/// `tuskd sync pull` — materialize the snapshot (additive; local files not
-/// in the manifest are left alone).
+/// `tuskd sync pull` — materialize the cloud view (additive; local files
+/// not in the manifest are left alone, files in it are overwritten).
 pub fn pull(vault: &Path) -> Result<(), CoreError> {
-    let (cloud, config) = client(vault)?;
-    let (cloud2, _) = client(vault)?;
-    let provider = CloudProvider::new(cloud2).map_err(err)?;
-    let (rmk, _generation) = current_rmk(vault, &cloud, &provider, &config.repo_id)?;
-
-    let sealed = provider.get(MANIFEST).map_err(|e| match e {
-        SyncError::NotFound(_) => CoreError::Other("nothing pushed yet (no manifest)".into()),
-        other => err(other),
-    })?;
-    let table = KeyTable::open(&sealed, &rmk, &config.repo_id).map_err(err)?;
-    let mut written: BTreeMap<String, usize> = BTreeMap::new();
-    for (rel, entry) in table.iter() {
-        let blob = provider.get(&entry.blob).map_err(err)?;
-        let plaintext = entry
-            .dek()
-            .map_err(err)?
-            .decrypt(&config.repo_id, rel, &blob)
-            .map_err(err)?;
-        let path = vault.join(rel);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| io(parent, e))?;
-        }
-        std::fs::write(&path, &plaintext).map_err(|e| io(&path, e))?;
-        written.insert(rel.clone(), plaintext.len());
-    }
-    println!("pulled {} files", written.len());
+    let written = crate::sync_worker::pull_all(vault)?;
+    println!("pulled {written} files");
     Ok(())
 }
 
@@ -523,6 +472,16 @@ pub fn revoke(vault: &Path, device_id: &str) -> Result<(), CoreError> {
                 &table.seal(&rmk_new, &config.repo_id).map_err(err)?,
             )
             .map_err(err)?;
+        // Announce the manifest change on the oplog (D28) so other
+        // devices' workers refresh their key promptly instead of on the
+        // next content change.
+        let payload = serde_json::to_vec(&crate::sync_worker::OpPayload {
+            v: 1,
+            put: Vec::new(),
+            del: Vec::new(),
+            manifest: true,
+        })?;
+        cloud.append_op(&payload).map_err(err)?;
     }
     store_rmk(vault, &rmk_new, generation)?;
 

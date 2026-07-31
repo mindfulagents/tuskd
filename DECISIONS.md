@@ -514,3 +514,57 @@ Client half of tusk-cloud C9, closing the revoke→rotate M1 exit criterion:
   syncing → revoked → immediate 403 lockout; A pushes post-rotation
   content; C enrolls, is approved at generation 2, pulls everything
   byte-identical.
+
+## D28 — daemon auto-sync worker: incremental, oplog-driven (2026-07-31)
+
+The vault now syncs itself: when a vault is connected to a cloud repo,
+`tuskd start` runs a background worker (`sync_worker.rs`, plain thread —
+the tusk-sync clients are blocking by design) that executes a
+pull-then-push cycle at startup and every `[sync] interval_secs`
+(default 30 s; `[sync] auto = false` opts out). Decisions:
+
+- **Sync ops on the oplog.** Every push appends one signed op whose
+  payload names the affected blob names (`{"v":1,"put":[..],"del":[..],
+  "manifest":bool}`) — names the server's registry already stores, so
+  ops leak nothing new; the server stays ciphertext-blind. Pulls drain
+  ops past a per-device cursor, verify each signature against the device
+  registry, and fetch only the named blobs. This is what the C3 oplog
+  was built for.
+- **Device-local sync state** (`.tusk/sync/state.json`): per-file
+  plaintext hash + blob name as of the last agreement with the cloud,
+  plus the cursor and RMK generation. Pushes are the scan-vs-state diff
+  (upload into stable blob slots; re-seal the manifest only when the
+  file *set* changed). Deletions propagate only for files this device
+  itself previously synced — a fresh or wiped vault can structurally
+  never mass-tombstone a repo.
+- **Local wins.** A pull never overwrites or deletes a locally modified
+  file; the push half re-uploads it, so conflicting edits converge to
+  the most recent writer with nothing destroyed. Manifest write races
+  self-heal: a foreign manifest op triggers a reconcile that re-pushes
+  any file the clobbered manifest dropped without an explicit delete.
+- **Fresh devices adopt, never replay**: with no state, the worker
+  materializes the current manifest additively (a diverging local copy
+  is recorded at the remote hash, i.e. dirty, and re-pushed), then
+  fast-forwards the cursor past history.
+- **Rotation re-key, incremental + idempotent** (preserving D27's
+  defense-in-depth): on a generation change, any manifest entry whose
+  blob name no longer matches the current RMK derivation is re-encrypted
+  under a fresh DEK at its new name (content taken from the old blob, so
+  never-pulled files re-key too) and the old name tombstoned. Names are
+  deterministic, so later devices find nothing left to do. `sync revoke`
+  now announces its manifest re-seal on the oplog so other devices
+  refresh promptly.
+- **Manual verbs share the worker's code**: `sync push` is the
+  incremental push half (a first push uploads everything but no longer
+  clobbers remote-only manifest entries, and the pre-D26 blind 64-hex
+  tombstone sweep is gone); `sync pull` materializes the manifest and
+  records the result so a running worker doesn't re-push it. Running
+  manual verbs while a daemon's worker is active can race state.json
+  (atomic rename either way); the loser's update is re-derived next
+  cycle.
+- **Verified** by a full multi-device E2E (`tests/d28_worker.rs`)
+  against a stateful in-process fake of the tusk-cloud surface:
+  incremental push (content edits skip the manifest), oplog-driven pull,
+  idle cycles touch no write path, conflict convergence, deletion
+  propagation with dirty-copy survival, empty-device adoption appending
+  zero ops, and the rotation re-key including cross-device idempotence.
