@@ -5,6 +5,18 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## v0.7.1 — 2026-07-31
+
+- **`tuskd sync delete-repo <id> --yes` (D31):** permanently delete a
+  cloud repo you own, freeing your plan's repo slot. Cloud copy only —
+  local vaults are never touched.
+- **Second-vault boot fix (D32):** when the stock port 7477 is already
+  taken (say, by another vault's daemon), `tuskd start` now falls back
+  to a free port with a notice instead of dying; custom ports still
+  fail hard. `tuskd start -d` failures print the actual error from
+  daemon.log, and the auto-sync worker no longer starts before the
+  daemon's listeners are up.
+
 ## v0.7.0 — 2026-07-31
 
 - **Sign in with your email (D29):** `tuskd sync login` — an 8-character
