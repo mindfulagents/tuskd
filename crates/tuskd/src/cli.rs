@@ -219,19 +219,6 @@ pub enum SyncCommand {
         #[arg(long)]
         phrase: Option<String>,
     },
-    /// Beta: create account + repo + this device in one call (admin token)
-    Bootstrap {
-        #[arg(long)]
-        url: String,
-        #[arg(long)]
-        admin_token: String,
-        #[arg(long)]
-        email: String,
-        #[arg(long)]
-        repo_name: String,
-        #[arg(long)]
-        name: Option<String>,
-    },
     /// Show connection, fingerprint, and approval status
     Status,
     /// List this repo's devices with fingerprints

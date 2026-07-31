@@ -595,3 +595,12 @@ The client half of tusk-cloud C10, making onboarding admin-token-free:
   Spaces bucket with the session-created device authenticating on the
   device plane. New onboarding is: install → `tuskd init` → `sync
   login` → `sync init` → done.
+
+## D30 — `sync bootstrap` removed (2026-07-31)
+
+tusk-cloud C10 + D29 are live on cloud.opentusk.ai, so the C6 beta path
+dies on schedule per its delete-not-evolve charter: the `tuskd sync
+bootstrap` verb is gone (server side removed in tusk-cloud C11). The
+replacement is the self-serve pair `sync login` → `sync init`. Nobody
+outside this team ever shipped with bootstrap (it existed for four
+days, gated by an admin token), so no deprecation window is owed.
