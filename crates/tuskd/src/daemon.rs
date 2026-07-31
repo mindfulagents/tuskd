@@ -29,6 +29,22 @@ pub fn run(config: Config) -> Result<(), CoreError> {
     let ctx = Arc::clone(&host.ctx);
     let config = Arc::new(config);
 
+    // D28: auto-sync worker — a plain thread (the sync clients are
+    // blocking HTTP), started only when this vault is connected to a
+    // cloud repo and `[sync] auto` is not disabled.
+    let sync_worker = if config.sync_auto && crate::sync_worker::is_connected(&config.vault) {
+        eprintln!(
+            "sync: auto-sync every {}s (disable with [sync] auto = false)",
+            config.sync_interval_secs
+        );
+        Some(crate::sync_worker::SyncWorker::spawn(
+            config.vault.clone(),
+            std::time::Duration::from_secs(config.sync_interval_secs),
+        ))
+    } else {
+        None
+    };
+
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -138,6 +154,9 @@ pub fn run(config: Config) -> Result<(), CoreError> {
 
     let _ = std::fs::remove_file(&config.uds_path);
     crate::dashboard::remove_token_file(&config.vault);
+    if let Some(worker) = sync_worker {
+        worker.stop();
+    }
     host.shutdown();
     eprintln!("tuskd: shut down cleanly");
     result

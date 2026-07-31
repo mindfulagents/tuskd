@@ -21,6 +21,11 @@ pub struct Config {
     /// change journal) only activates when a user opts in; the full `[sync]`
     /// section arrives with the networked worker (M1).
     pub sync_enabled: bool,
+    /// `[sync] auto` (D28). On by default: when the vault is connected to a
+    /// cloud repo, the daemon runs the auto-sync worker.
+    pub sync_auto: bool,
+    /// `[sync] interval_secs` (D28): seconds between worker cycles.
+    pub sync_interval_secs: u64,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -53,6 +58,8 @@ struct FileRanking {
 #[derive(Debug, Default, Deserialize)]
 struct FileSync {
     enabled: Option<bool>,
+    auto: Option<bool>,
+    interval_secs: Option<u64>,
 }
 
 /// Written by `tuskd init`.
@@ -75,9 +82,13 @@ uses_weight = 0.3
 trust_weight = 0.2
 
 [sync]
-# Sync groundwork (M0): local change journal + identities only; no
-# networking. The full section lands with the sync worker.
+# Local change journal + identities (M0). Off by default.
 enabled = false
+# When this vault is connected to a cloud repo (`tuskd sync connect` or
+# `bootstrap`), the daemon syncs it automatically in the background.
+# Set auto = false to sync only via the manual `tuskd sync push|pull`.
+# auto = true
+# interval_secs = 30
 "#;
 
 /// D7: --vault > $OPENTUSK_VAULT > ./.tusk > ./vault/.tusk > ".".
@@ -161,6 +172,8 @@ pub fn load(vault: &Path) -> Result<Config, CoreError> {
             trust_weight: file.ranking.trust_weight.unwrap_or(0.2),
         },
         sync_enabled: file.sync.enabled.unwrap_or(false),
+        sync_auto: file.sync.auto.unwrap_or(true),
+        sync_interval_secs: file.sync.interval_secs.unwrap_or(30).clamp(5, 86_400),
     })
 }
 
