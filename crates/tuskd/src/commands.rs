@@ -450,7 +450,7 @@ fn sync_command(
             repo,
             name,
             phrase,
-        } => crate::sync_cloud::connect(vault, &url, &repo, name, phrase),
+        } => crate::sync_cloud::connect(vault, url, &repo, name, phrase),
         SyncCommand::Status => crate::sync_cloud::status(vault),
         SyncCommand::Devices => crate::sync_cloud::devices(vault),
         SyncCommand::Approve {

@@ -213,9 +213,10 @@ pub enum SyncCommand {
     },
     /// Enroll this vault as a new device of an existing cloud repo
     Connect {
-        /// tusk-cloud base URL, e.g. https://cloud.opentusk.ai
+        /// tusk-cloud base URL (defaults to your login session's server,
+        /// else https://cloud.opentusk.ai)
         #[arg(long)]
-        url: String,
+        url: Option<String>,
         /// Repo id to join
         #[arg(long)]
         repo: String,
