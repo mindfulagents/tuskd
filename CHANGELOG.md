@@ -5,6 +5,13 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## v0.7.2 — 2026-07-31
+
+- **`tuskd sync connect` no longer requires `--url` (D33):** it uses
+  your login session's server, falling back to https://cloud.opentusk.ai
+  — so the connect-after-login flow on a second machine is just
+  `tuskd sync connect --repo <id>`.
+
 ## v0.7.1 — 2026-07-31
 
 - **`tuskd sync delete-repo <id> --yes` (D31):** permanently delete a
