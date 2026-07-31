@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 /// tuskd — local, single-binary memory system for AI agent swarms.
 #[derive(Debug, Parser)]
-#[command(name = "tuskd", version, about)]
+#[command(name = "tuskd", version, about, styles = crate::style::HELP_STYLES)]
 pub struct Cli {
     /// Vault directory (defaults to $OPENTUSK_VAULT or ./vault)
     #[arg(long, global = true)]
@@ -31,7 +31,11 @@ pub enum Command {
         detach: bool,
     },
     /// Show daemon / vault status
-    Status,
+    Status {
+        /// Machine-readable output (also the default when piped)
+        #[arg(long)]
+        json: bool,
+    },
     /// Run an MCP stdio session (proxy to daemon, or embedded if none)
     Mcp {
         /// Agent identity for this session

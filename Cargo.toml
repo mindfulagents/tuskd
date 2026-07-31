@@ -37,6 +37,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-uti
 axum = "0.8"
 hyper = "1"
 clap = { version = "4", features = ["derive"] }
+anstyle = "1"
+anstream = "1"
 notify = "7"
 fs2 = "0.4"
 tar = "0.4"

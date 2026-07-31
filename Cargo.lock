@@ -2165,6 +2165,8 @@ dependencies = [
 name = "tuskd"
 version = "0.7.3"
 dependencies = [
+ "anstream",
+ "anstyle",
  "axum",
  "base64",
  "chrono",
