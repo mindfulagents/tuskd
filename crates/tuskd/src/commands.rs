@@ -17,7 +17,8 @@ pub fn run(cli: Cli) -> i32 {
     match dispatch(&vault, cli.command) {
         Ok(()) => 0,
         Err(e) => {
-            eprintln!("error: {e}");
+            use crate::style::ERR;
+            anstream::eprintln!("{ERR}error:{ERR:#} {e}");
             1
         }
     }
@@ -48,9 +49,13 @@ fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> 
             let cfg = config::load(vault)?;
             crate::stdio::run(cfg, agent)
         }
-        Command::Status => {
+        Command::Status { json } => {
             let data = admin_route(vault, &AdminRequest::Status)?;
-            println!("{}", serde_json::to_string_pretty(&data)?);
+            if json || !crate::style::stdout_is_tty() {
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                print_status_human(vault, &data);
+            }
             Ok(())
         }
         Command::Search {
@@ -145,6 +150,50 @@ fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> 
     }
 }
 
+/// Human `tuskd status` panel (D35). The machine view (today's JSON) stays
+/// the default for pipes and behind `--json`; this renders only on a TTY.
+fn print_status_human(vault: &std::path::Path, data: &Value) {
+    use crate::style::{display_path, group_thousands, ACCENT, DIM, ERR, OK};
+    let version = data["version"].as_str().unwrap_or("?");
+    let vault_shown = display_path(vault);
+    anstream::println!("{ACCENT}tuskd {version}{ACCENT:#} — vault {DIM}{vault_shown}{DIM:#}");
+
+    if data["daemon"].as_bool() == Some(true) {
+        anstream::println!("  daemon   {OK}✓ running{OK:#}");
+    } else {
+        anstream::println!("  daemon   {ERR}✗ not running{ERR:#} {DIM}(this was a one-shot look at the vault){DIM:#}");
+        anstream::println!("           {DIM}next: tuskd start -d{DIM:#}");
+    }
+
+    let docs = data["index"]["valid"].as_i64().unwrap_or(0);
+    let scopes = data["index"]["by_scope"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
+    anstream::println!(
+        "  index    {OK}✓{OK:#} {} doc(s) {DIM}across {} scope(s){DIM:#}",
+        group_thousands(docs),
+        scopes
+    );
+
+    let pending = data["review_queue_depth"].as_i64().unwrap_or(0);
+    if pending > 0 {
+        anstream::println!(
+            "  review   {ACCENT}{pending} pending{ACCENT:#} {DIM}next: tuskd review list{DIM:#}"
+        );
+    } else {
+        anstream::println!("  review   {DIM}queue empty{DIM:#}");
+    }
+
+    let agents = data["agents"].as_i64().unwrap_or(0);
+    anstream::println!("  agents   {agents}");
+
+    match crate::sync_cloud::summary_line(vault) {
+        Some(line) => anstream::println!("  sync     {OK}✓{OK:#} {line}"),
+        None => anstream::println!("  sync     {DIM}off — enable: tuskd sync login{DIM:#}"),
+    }
+}
+
 /// Last `n` non-empty lines of a log file, indented for error display.
 /// Empty string when the file is missing or empty.
 pub(crate) fn log_tail(path: &std::path::Path, n: usize) -> String {
@@ -176,7 +225,7 @@ pub(crate) fn init(vault: &std::path::Path) -> Result<(), CoreError> {
     let host = CoreHost::open(&cfg, false)?;
     host.shutdown();
     println!("initialized vault at {}", vault.display());
-    println!("next: tuskd agent create <id>   # then: tuskd start");
+    crate::style::hint("next: tuskd agent create <id>   # then: tuskd start");
     Ok(())
 }
 
@@ -212,7 +261,7 @@ fn start_detached(vault: &std::path::Path) -> Result<(), CoreError> {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
     println!("daemon started (pid {pid}); log: {}", log.display());
-    println!("stop: tuskd stop   status: tuskd status   ui: tuskd dashboard");
+    crate::style::hint("stop: tuskd stop   status: tuskd status   ui: tuskd dashboard");
     Ok(())
 }
 

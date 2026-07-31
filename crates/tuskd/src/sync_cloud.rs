@@ -335,7 +335,7 @@ pub fn login(vault: &Path, url: &str, email: &str, code: Option<String>) -> Resu
         },
     )?;
     println!("logged in as {} ({} plan)", session.email, session.plan);
-    println!("next: tuskd sync init   # create a cloud repo for this vault");
+    crate::style::hint("next: tuskd sync init   # create a cloud repo for this vault");
     Ok(())
 }
 
@@ -382,7 +382,7 @@ pub fn init(
     println!("RECOVERY PHRASE — write this down; it is shown exactly once:");
     println!("  {}", rmk.to_mnemonic().map_err(err)?);
     println!();
-    println!("next: tuskd sync push   # or just run the daemon — it syncs automatically");
+    crate::style::hint("next: tuskd sync push   # or just run the daemon — it syncs automatically");
     Ok(())
 }
 
@@ -518,37 +518,64 @@ pub fn connect(
     Ok(())
 }
 
+/// One-line sync summary for the human status panel (D35): `None` when
+/// this vault has no cloud connection configured.
+pub(crate) fn summary_line(vault: &Path) -> Option<String> {
+    let config = load_config(vault).ok()?;
+    let mut parts = vec![format!(
+        "repo {}",
+        config.repo_id.split('-').next().unwrap_or(&config.repo_id)
+    )];
+    if let Some((_, generation)) = load_local_rmk(vault) {
+        parts.push(format!("gen {generation}"));
+    }
+    if let Ok(Some(state)) = crate::sync_state::load(&sync_dir(vault)) {
+        parts.push(format!("{} file(s) synced", state.files.len()));
+    }
+    match crate::config::load(vault) {
+        Ok(cfg) if cfg.sync_enabled && cfg.sync_auto => {
+            parts.push(format!("auto every {}s", cfg.sync_interval_secs));
+        }
+        Ok(_) => parts.push("manual push/pull".to_string()),
+        Err(_) => {}
+    }
+    Some(parts.join(" · "))
+}
+
 /// `tuskd sync status`.
 pub fn status(vault: &Path) -> Result<(), CoreError> {
+    use crate::style::{ACCENT, DIM, ERR, OK};
     let (cloud, config) = client(vault)?;
-    println!("server:  {}", config.url);
-    println!("repo:    {}", config.repo_id);
-    println!("device:  {}", config.device_id);
+    anstream::println!("{DIM}server:{DIM:#}  {}", config.url);
+    anstream::println!("{DIM}repo:{DIM:#}    {}", config.repo_id);
+    anstream::println!("{DIM}device:{DIM:#}  {}", config.device_id);
     let key = ensure_device_key(vault)?;
-    println!(
-        "fingerprint: {}",
+    anstream::println!(
+        "{DIM}fingerprint:{DIM:#} {}",
         tusk_sync::device_fingerprint(&key.verifying_key().to_bytes())
     );
     let has_rmk = sync_dir(vault).join(RMK_FILE).exists();
     match cloud.fetch_wrap() {
-        Ok(_) => println!(
-            "status:  approved{}",
+        Ok(_) => anstream::println!(
+            "{DIM}status:{DIM:#}  {OK}approved{OK:#}{}",
             if has_rmk {
                 ", repo key present"
             } else {
                 ", wrap available"
             }
         ),
-        Err(SyncError::Http { status: 403, .. }) => println!("status:  pending approval"),
-        Err(SyncError::Http { status: 404, .. }) => println!(
-            "status:  approved{}",
+        Err(SyncError::Http { status: 403, .. }) => {
+            anstream::println!("{DIM}status:{DIM:#}  {ACCENT}pending approval{ACCENT:#}")
+        }
+        Err(SyncError::Http { status: 404, .. }) => anstream::println!(
+            "{DIM}status:{DIM:#}  {OK}approved{OK:#}{}",
             if has_rmk {
                 ", repo key present"
             } else {
                 ", NO wrap and no local key"
             }
         ),
-        Err(e) => println!("status:  unreachable ({e})"),
+        Err(e) => anstream::println!("{DIM}status:{DIM:#}  {ERR}unreachable{ERR:#} ({e})"),
     }
     Ok(())
 }

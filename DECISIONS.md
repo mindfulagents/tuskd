@@ -668,3 +668,29 @@ asking and the server had no rename. Three changes:
   `PATCH /v1/repos/{id}`. Names are display metadata only — the repo
   id, devices, and key material are untouched — so a bad name is now a
   ten-second fix instead of delete + re-init.
+## D35 — CLI visual design system (2026-07-31)
+
+Approved proposal (PLANS/CLI_DESIGN_PROPOSAL.md, #building thread
+1528b315): the CLI adopts the opentusk.ai brand palette — gold accent
+(256-color 178), sage success (108), red errors, dim metadata — with
+color-as-meaning rules and zero new dependencies (`anstyle`/`anstream`
+already ship inside clap 4; they are now direct deps).
+
+Contracts that make this safe:
+
+- **Format switches on TTY, not flags.** Piped/redirected output is
+  byte-identical to the pre-D35 output (anstream strips styles;
+  human-vs-JSON views check `stdout_is_tty`). Existing scripts and the
+  acceptance suite read piped output and are untouched. `status --json`
+  forces the machine view on a TTY.
+- **Copyable strings never carry escapes**: tokens, recovery-phrase
+  words, fingerprints, URLs, JSON.
+- Semantic styles live in one module (`tuskd/src/style.rs`); commands
+  never name colors directly. clap help screens are tinted via
+  `Command::styles`.
+
+Shipped in two slices: this one (style module, human `status` panel
+with a CLI-side sync summary line, styled `sync status`, red `error:` /
+dim `next:` treatment, help tint) and a follow-up (tables, search list,
+recovery-phrase / fingerprint ceremony boxes, push/pull progress).
+The daemon's tracing logs are deliberately untouched.
