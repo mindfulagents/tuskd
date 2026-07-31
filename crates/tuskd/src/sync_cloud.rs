@@ -366,14 +366,31 @@ pub fn delete_repo(vault: &Path, repo_id: &str, yes: bool) -> Result<(), CoreErr
     Ok(())
 }
 
-/// `tuskd sync connect` — enroll this vault's device into an existing repo.
+/// Default control-plane URL, shared by `login` (clap default) and
+/// `connect`'s inference (D33).
+pub const DEFAULT_CLOUD_URL: &str = "https://cloud.opentusk.ai";
+
+/// `tuskd sync connect` — enroll this vault's device into an existing
+/// repo. The URL is inferred when omitted (D33): the login session's
+/// server first, else the stock default — `connect` right after
+/// `login`/`repos` needs no flag.
 pub fn connect(
     vault: &Path,
-    url: &str,
+    url: Option<String>,
     repo_id: &str,
     name: Option<String>,
     phrase: Option<String>,
 ) -> Result<(), CoreError> {
+    let url = &match url {
+        Some(url) => url,
+        None => match load_session(vault) {
+            Ok(session) => {
+                println!("using {} (from your login session)", session.url);
+                session.url
+            }
+            Err(_) => DEFAULT_CLOUD_URL.to_string(),
+        },
+    };
     let key = ensure_device_key(vault)?;
     let (ed25519, x25519) = device_keys_raw(&key);
     let (device_id, fingerprint) =

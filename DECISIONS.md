@@ -636,3 +636,13 @@ log. Fixes:
 - Reproduced and verified on this machine (which also runs a 7477
   daemon): a default-config scratch vault previously failed identically
   and now boots on an ephemeral port with the notice.
+
+## D33 — `connect` infers the server URL (2026-07-31)
+
+Third live catch of the day: the walkthrough said `sync connect --repo
+<id>` but the verb demanded `--url`, while `login` defaults it —
+inconsistent for no reason. `--url` on `connect` is now optional:
+explicit flag first, else the login session's server (the machine that
+just ran `login`/`repos` is the machine running `connect`), else the
+stock https://cloud.opentusk.ai. When inferred from the session it
+says so, in case the user meant a different server.
