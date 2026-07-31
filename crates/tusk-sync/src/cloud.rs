@@ -723,6 +723,29 @@ impl AccountClient {
         Ok((created.repo_id, created.device_id))
     }
 
+    /// Permanently delete an owned repo (tusk-cloud C12).
+    pub fn delete_repo(&self, repo_id: &str) -> Result<(), SyncError> {
+        let path = format!("/v1/repos/{repo_id}");
+        let url = format!("{}{path}", self.base_url);
+        let token = self
+            .token
+            .as_deref()
+            .ok_or_else(|| SyncError::Storage("not logged in".into()))?;
+        let resp = self
+            .http
+            .delete(&url)
+            .bearer_auth(token)
+            .send()
+            .map_err(|e| SyncError::Storage(format!("request to {url}: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(SyncError::Http {
+                status: resp.status().as_u16(),
+                url,
+            });
+        }
+        Ok(())
+    }
+
     /// The account's repos.
     pub fn list_repos(&self) -> Result<Vec<AccountRepo>, SyncError> {
         let path = "/v1/repos";

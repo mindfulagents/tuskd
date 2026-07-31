@@ -478,3 +478,18 @@ fn expired_session_surfaces_as_http_401() {
         other => panic!("expected Http error, got {other:?}"),
     }
 }
+
+#[test]
+fn delete_repo_sends_the_bearer_delete() {
+    let (base, rx) = one_shot_server("200 OK", r#"{"deleted":"x"}"#);
+    let client = tusk_sync::AccountClient::new(&base, Some("tsks_abc".into())).expect("client");
+    client
+        .delete_repo("9e86dab9-bb27-4670-ac5b-206e139387ff")
+        .expect("delete");
+    let request = rx.recv().expect("captured request");
+    assert_eq!(
+        request.start_line,
+        "DELETE /v1/repos/9e86dab9-bb27-4670-ac5b-206e139387ff HTTP/1.1"
+    );
+    assert_eq!(request.header("authorization"), "Bearer tsks_abc");
+}

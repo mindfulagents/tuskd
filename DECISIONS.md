@@ -604,3 +604,12 @@ bootstrap` verb is gone (server side removed in tusk-cloud C11). The
 replacement is the self-serve pair `sync login` → `sync init`. Nobody
 outside this team ever shipped with bootstrap (it existed for four
 days, gated by an admin token), so no deprecation window is owed.
+
+## D31 — `sync delete-repo` (2026-07-31)
+
+Client verb for tusk-cloud C12, born the moment the owner's first-run
+test hit the free-plan cap with no way to free the slot. `tuskd sync
+delete-repo <id> --yes` deletes the cloud copy only — local vaults are
+never touched — and clears this vault's connection state if it pointed
+at the deleted repo. `--yes` is mandatory; there is no interactive
+bypass for a permanent deletion.

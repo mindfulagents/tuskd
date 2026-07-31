@@ -204,6 +204,13 @@ pub enum SyncCommand {
     },
     /// List your account's cloud repos (requires `sync login` first)
     Repos,
+    /// Permanently delete a cloud repo you own (the local vault is untouched)
+    DeleteRepo {
+        repo_id: String,
+        /// Confirm: deletion is permanent and frees the plan's repo slot
+        #[arg(long)]
+        yes: bool,
+    },
     /// Enroll this vault as a new device of an existing cloud repo
     Connect {
         /// tusk-cloud base URL, e.g. https://cloud.opentusk.ai
