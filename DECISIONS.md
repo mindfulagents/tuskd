@@ -646,3 +646,25 @@ explicit flag first, else the login session's server (the machine that
 just ran `login`/`repos` is the machine running `connect`), else the
 stock https://cloud.opentusk.ai. When inferred from the session it
 says so, in case the user meant a different server.
+
+## D34 — repo names: confirmed defaults + rename (2026-07-31)
+
+Reported live: a vault initialized in a folder called `a` silently
+became cloud repo "a", permanently — init took the basename without
+asking and the server had no rename. Three changes:
+
+- **Init confirms the name on a TTY** (`Repo name [<default>]:`, empty
+  answer keeps it). Non-interactive runs and `--repo-name` behave
+  exactly as before, so scripts and CI see no change.
+- **The derived default is guard-railed**: a basename with fewer than
+  3 alphanumeric chars or on a small generic list (`tmp`, `test`,
+  `untitled`, …) no longer wins outright — the parent is prefixed for
+  signal (`projects/a` → `projects-a`), and the home directory or an
+  unresolvable path falls back to `vault`. Deliberately *not* used:
+  hostnames or dates (repos are multi-device and long-lived; both age
+  badly) and cute generated names (the basename is usually right —
+  only the junk cases needed catching).
+- **`tuskd sync rename <name> [--repo <id>]`** against tusk-cloud C15's
+  `PATCH /v1/repos/{id}`. Names are display metadata only — the repo
+  id, devices, and key material are untouched — so a bad name is now a
+  ten-second fix instead of delete + re-init.
