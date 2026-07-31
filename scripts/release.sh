@@ -15,8 +15,8 @@
 #   v<V>/tuskd-v<V>-<target>.tar.gz.sha256   checksum (shasum -c format)
 #   latest.json                              version + per-target manifest
 #
-# Artifacts are committed to git and served from get.opentusk.ai by
-# scripts/deploy-site.sh. To release a new version: bump the version in
+# Artifacts were committed to git and served from get.opentusk.ai by
+# the retired Vercel deploy (D15/D37). To release a new version: bump the version in
 # Cargo.toml, run this script, then deploy. Old release directories are
 # never modified — pinned installs stay reproducible.
 
@@ -71,4 +71,4 @@ manifest = {"name": "tuskd", "version": version, "targets": targets}
 print(f"release.sh: wrote site/releases/latest.json ({', '.join(targets)})")
 EOF
 
-echo "release.sh: done — deploy with scripts/deploy-site.sh"
+echo "release.sh: done — NOTE: retired flow (D19/D37); v0.5.0+ ship via the cargo-dist workflow"

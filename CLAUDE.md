@@ -18,11 +18,10 @@ Post-v0 additive CLI (see DECISIONS.md): D16 `tuskd agent setup <client>` + `age
 
 ## Distribution, releases, versioning (added 2026-07-25; details in DECISIONS.md D15)
 
-- **Public surface:** `opentusk.ai` = single-page docs (`site/index.html`); `get.opentusk.ai` = installer (`site/install.sh`; `/` 307-redirects to it); both served by one Vercel project `opentusk-www` from `site/`. DNS at DNSimple. Credentials for both APIs in `.env.deploy` (never commit it).
+- **Public surface:** the opentusk.ai website and the get.opentusk.ai installer live in `mindfulagents/opentusk-ai` and auto-deploy to DigitalOcean App Platform on merge to that repo's `main` (D37) — this repo carries no website. DNS at DNSimple; credentials in `.env.deploy` (never commit it).
 - **Cut a release (D19/D20):** bump `[workspace.package] version` in `Cargo.toml` and add the version's section to `CHANGELOG.md` (same PR) → merge to main (CI gate must be green) → `git tag v<V> && git push origin v<V>` → the cargo-dist workflow builds 4 targets and publishes the GitHub Release with the changelog section as its body. Edit release config in `dist-workspace.toml` and regenerate `release.yml` with `dist generate` — never hand-edit the workflow.
 - **Announce (D20):** `scripts/announce-release.sh` posts the GitHub Release notes to the team's release-notes Buzz channel (needs buzz CLI creds + `BUZZ_ANNOUNCE_CHANNEL`; runs on an operator/agent machine, never in CI). An agent-side watcher runs it automatically after each release; the script is the manual fallback.
-- **Rules:** shipped releases are immutable (GitHub Release assets and the legacy `site/releases/v<V>/` dirs — never rewrite either); `site/releases/latest.json` is frozen at v0.4.2 (legacy installers only); the docs page must stay in lockstep with the README quickstart (acceptance criterion: README quickstart works verbatim).
-- **Site changes only** (no new binary): edit `site/index.html` / `site/docs.html` / `site/install.sh`, run `./scripts/deploy-site.sh`.
+- **Rules:** shipped releases are immutable (GitHub Release assets and the legacy `site/releases/v<V>/` dirs — never rewrite either); `site/releases/latest.json` is frozen at v0.4.2 (legacy installers only); the website's docs must stay in lockstep with the README quickstart (acceptance criterion: README quickstart works verbatim) — coordinate release PRs with a matching `opentusk-ai` PR.
 - **Later:** Homebrew tap + cargo-binstall channels (D19 leaves them open).
 
 ## Authoritative documents
