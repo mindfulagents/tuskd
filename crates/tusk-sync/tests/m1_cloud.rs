@@ -396,3 +396,85 @@ fn approve_signs_the_wrap_relay_and_fetch_wrap_round_trips() {
     assert_eq!(wrap, b"my-wrap-bytes");
     assert_eq!(generation, 3);
 }
+
+// ---------------------------------------------------------------------------
+// Account plane (C10 / D29)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn auth_start_posts_the_email() {
+    let (base, rx) = one_shot_server("200 OK", r#"{"sent":true,"expires_secs":600}"#);
+    tusk_sync::AccountClient::new(&base, None)
+        .expect("client")
+        .auth_start("user@example.com")
+        .expect("start");
+    let request = rx.recv().expect("captured request");
+    assert_eq!(request.start_line, "POST /v1/auth/start HTTP/1.1");
+    let body: serde_json::Value = serde_json::from_slice(&request.body).expect("json");
+    assert_eq!(body["email"], "user@example.com");
+}
+
+#[test]
+fn auth_verify_returns_the_session_and_arms_the_client() {
+    let (base, rx) = one_shot_server(
+        "200 OK",
+        r#"{"token":"tsks_abc","account_id":"d8df7c5a-e878-43b6-8d04-f4e7b2dddaef","email":"user@example.com","plan":"free"}"#,
+    );
+    let mut client = tusk_sync::AccountClient::new(&base, None).expect("client");
+    let session = client
+        .auth_verify("user@example.com", "AAAA-2222", "laptop")
+        .expect("verify");
+    assert_eq!(session.token, "tsks_abc");
+    assert_eq!(session.plan, "free");
+    let request = rx.recv().expect("captured request");
+    let body: serde_json::Value = serde_json::from_slice(&request.body).expect("json");
+    assert_eq!(body["code"], "AAAA-2222");
+    assert_eq!(body["label"], "laptop");
+
+    // The client now holds the token: create_repo sends it as a bearer.
+    let (base, rx) = one_shot_server(
+        "200 OK",
+        r#"{"repo_id":"9e86dab9-bb27-4670-ac5b-206e139387ff","device_id":"c2781c22-dac4-4508-b36c-20a84a11b7ee"}"#,
+    );
+    let client = tusk_sync::AccountClient::new(&base, Some(session.token)).expect("client");
+    let (repo_id, device_id) = client
+        .create_repo("vault", "laptop", &[1u8; 32], &[2u8; 32])
+        .expect("create repo");
+    assert_eq!(repo_id, "9e86dab9-bb27-4670-ac5b-206e139387ff");
+    assert_eq!(device_id, "c2781c22-dac4-4508-b36c-20a84a11b7ee");
+    let request = rx.recv().expect("captured request");
+    assert_eq!(request.start_line, "POST /v1/repos HTTP/1.1");
+    assert_eq!(request.header("authorization"), "Bearer tsks_abc");
+    let body: serde_json::Value = serde_json::from_slice(&request.body).expect("json");
+    assert_eq!(body["name"], "vault");
+    assert_eq!(
+        b64_decode(body["device"]["ed25519_pubkey"].as_str().expect("key")),
+        [1u8; 32]
+    );
+}
+
+#[test]
+fn list_repos_sends_the_bearer_and_parses() {
+    let (base, rx) = one_shot_server(
+        "200 OK",
+        r#"[{"repo_id":"9e86dab9-bb27-4670-ac5b-206e139387ff","name":"vault","rmk_generation":2}]"#,
+    );
+    let client = tusk_sync::AccountClient::new(&base, Some("tsks_abc".into())).expect("client");
+    let repos = client.list_repos().expect("list");
+    assert_eq!(repos.len(), 1);
+    assert_eq!(repos[0].name, "vault");
+    assert_eq!(repos[0].rmk_generation, 2);
+    let request = rx.recv().expect("captured request");
+    assert_eq!(request.start_line, "GET /v1/repos HTTP/1.1");
+    assert_eq!(request.header("authorization"), "Bearer tsks_abc");
+}
+
+#[test]
+fn expired_session_surfaces_as_http_401() {
+    let (base, _rx) = one_shot_server("401 Unauthorized", r#"{"error":"unauthenticated"}"#);
+    let client = tusk_sync::AccountClient::new(&base, Some("tsks_dead".into())).expect("client");
+    match client.list_repos().expect_err("401") {
+        tusk_sync::SyncError::Http { status, .. } => assert_eq!(status, 401),
+        other => panic!("expected Http error, got {other:?}"),
+    }
+}

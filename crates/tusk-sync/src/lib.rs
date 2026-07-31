@@ -15,7 +15,8 @@ pub mod spaces;
 pub mod wrap;
 
 pub use cloud::{
-    device_fingerprint, enroll_device, verify_op, CloudClient, CloudOp, CloudProvider,
+    device_fingerprint, enroll_device, verify_op, AccountClient, AccountRepo, AccountSession,
+    CloudClient, CloudOp, CloudProvider,
 };
 pub use crypto::{Dek, KeyTable, ObjectEntry, RepoMasterKey};
 pub use error::SyncError;

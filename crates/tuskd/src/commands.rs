@@ -414,6 +414,11 @@ fn sync_command(
 ) -> Result<(), CoreError> {
     use crate::cli::SyncCommand;
     match command {
+        SyncCommand::Login { url, email, code } => {
+            crate::sync_cloud::login(vault, &url, &email, code)
+        }
+        SyncCommand::Init { repo_name, name } => crate::sync_cloud::init(vault, repo_name, name),
+        SyncCommand::Repos => crate::sync_cloud::repos(vault),
         SyncCommand::Connect {
             url,
             repo,

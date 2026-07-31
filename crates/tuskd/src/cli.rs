@@ -181,6 +181,29 @@ pub enum ReviewCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum SyncCommand {
+    /// Sign in to your OpenTusk account (a code is emailed to you)
+    Login {
+        /// tusk-cloud base URL, e.g. https://cloud.opentusk.ai
+        #[arg(long, default_value = "https://cloud.opentusk.ai")]
+        url: String,
+        /// Account email address
+        #[arg(long)]
+        email: String,
+        /// The emailed code (omit to be prompted after the email is sent)
+        #[arg(long)]
+        code: Option<String>,
+    },
+    /// Create a cloud repo for this vault (requires `sync login` first)
+    Init {
+        /// Repo name (defaults to the vault directory's name)
+        #[arg(long)]
+        repo_name: Option<String>,
+        /// Device display name (defaults to hostname)
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// List your account's cloud repos (requires `sync login` first)
+    Repos,
     /// Enroll this vault as a new device of an existing cloud repo
     Connect {
         /// tusk-cloud base URL, e.g. https://cloud.opentusk.ai
