@@ -218,7 +218,9 @@ fn cloud(vault: &Path, prompt: &mut dyn Prompt) -> Result<(), CoreError> {
         crate::style::hint("  staying local-only — rerun tuskd setup any time to enable sync");
         return Ok(());
     }
-    ensure_session(vault, prompt)?;
+    if !ensure_session(vault, prompt)? {
+        return Ok(());
+    }
     match prompt.select(&[
         "create a new cloud repo for this vault",
         "join an existing repo (this is a second device)",
@@ -228,18 +230,61 @@ fn cloud(vault: &Path, prompt: &mut dyn Prompt) -> Result<(), CoreError> {
     }
 }
 
-fn ensure_session(vault: &Path, prompt: &mut dyn Prompt) -> Result<(), CoreError> {
+/// Sign in if needed. `Ok(false)` means the user chose to stop at the
+/// sign-in throttle — the cloud step ends without error and a rerun of
+/// `tuskd setup` resumes right here.
+fn ensure_session(vault: &Path, prompt: &mut dyn Prompt) -> Result<bool, CoreError> {
     if let Some(email) = crate::sync_cloud::session_email(vault) {
         anstream::println!("{OK}✓{OK:#} signed in as {email}");
-        return Ok(());
+        return Ok(true);
     }
     let email = prompt.line("account email (a sign-in code will be emailed)", None)?;
     if email.is_empty() {
         return Err(CoreError::Other("an email address is required".into()));
     }
-    crate::sync_cloud::login(vault, crate::sync_cloud::DEFAULT_CLOUD_URL, &email, None)?;
-    ran(&format!("tuskd sync login --email {email}"));
-    Ok(())
+    match crate::sync_cloud::login(vault, crate::sync_cloud::DEFAULT_CLOUD_URL, &email, None) {
+        Ok(()) => {
+            ran(&format!("tuskd sync login --email {email}"));
+            Ok(true)
+        }
+        // The send throttle is not a dead end (D38): codes stay valid for
+        // 10 minutes, so one already in the inbox still signs in — and
+        // entering it here requests nothing new. The sync_cloud error is
+        // a plain message; match its stable prefix.
+        Err(e) if e.to_string().contains("too many sign-in codes") => {
+            anstream::println!("{ERR}✗{ERR:#} {e}");
+            match existing_code(prompt)? {
+                Some(code) => {
+                    crate::sync_cloud::login(
+                        vault,
+                        crate::sync_cloud::DEFAULT_CLOUD_URL,
+                        &email,
+                        Some(code),
+                    )?;
+                    ran(&format!("tuskd sync login --email {email} --code <code>"));
+                    Ok(true)
+                }
+                None => {
+                    crate::style::hint(
+                        "  rerun tuskd setup once the wait is over — it resumes right here",
+                    );
+                    Ok(false)
+                }
+            }
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// After a throttled send: a code from an email that already arrived
+/// (they expire after 10 minutes), or `None` to stop the cloud step.
+fn existing_code(prompt: &mut dyn Prompt) -> Result<Option<String>, CoreError> {
+    let code = prompt.line(
+        "have a code from a recent email? enter it to sign in (Enter to stop here)",
+        Some(""),
+    )?;
+    let code = code.trim().to_string();
+    Ok(if code.is_empty() { None } else { Some(code) })
 }
 
 fn create_repo(vault: &Path, prompt: &mut dyn Prompt) -> Result<(), CoreError> {
@@ -484,6 +529,17 @@ mod tests {
         assert_eq!(prompt.asked.len(), 1);
         assert!(crate::sync_cloud::session_email(&vault).is_none());
         assert!(crate::sync_cloud::connection(&vault).is_none());
+    }
+
+    #[test]
+    fn existing_code_enter_stops_and_a_pasted_code_is_trimmed() {
+        let mut prompt = FakePrompt::new(&[""]);
+        assert_eq!(existing_code(&mut prompt).unwrap(), None);
+        let mut prompt = FakePrompt::new(&["  35128632 "]);
+        assert_eq!(
+            existing_code(&mut prompt).unwrap(),
+            Some("35128632".to_string())
+        );
     }
 
     #[test]

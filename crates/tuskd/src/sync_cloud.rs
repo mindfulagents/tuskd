@@ -293,6 +293,19 @@ fn session_expired(e: SyncError) -> CoreError {
     }
 }
 
+/// Human form of the sign-in-code throttle, with the server's
+/// `Retry-After` turned into a concrete wait when it sent one. The
+/// "too many sign-in codes" prefix is stable — the setup wizard matches
+/// on it to offer the enter-an-existing-code path (D38).
+fn rate_limit_message(retry_after_secs: Option<u64>) -> String {
+    let wait = match retry_after_secs {
+        Some(secs) if secs <= 90 => "about a minute".to_string(),
+        Some(secs) => format!("about {} minutes", secs.div_ceil(60)),
+        None => "a few minutes".to_string(),
+    };
+    format!("too many sign-in codes requested for this email — wait {wait}, then retry")
+}
+
 /// `tuskd sync login` — emailed sign-in code → stored session (D29).
 pub fn login(vault: &Path, url: &str, email: &str, code: Option<String>) -> Result<(), CoreError> {
     let mut client = tusk_sync::AccountClient::new(url, None).map_err(err)?;
@@ -300,9 +313,9 @@ pub fn login(vault: &Path, url: &str, email: &str, code: Option<String>) -> Resu
         Some(code) => code,
         None => {
             client.auth_start(email).map_err(|e| match e {
-                SyncError::Http { status: 429, .. } => CoreError::Other(
-                    "too many sign-in codes requested for this email — wait a bit".into(),
-                ),
+                SyncError::RateLimited {
+                    retry_after_secs, ..
+                } => CoreError::Other(rate_limit_message(retry_after_secs)),
                 other => err(other),
             })?;
             println!("sign-in code sent to {email} — enter it below");
@@ -983,6 +996,19 @@ mod tests {
             }
         }
         width
+    }
+
+    #[test]
+    fn rate_limit_message_turns_retry_after_into_a_concrete_wait() {
+        assert_eq!(
+            rate_limit_message(Some(540)),
+            "too many sign-in codes requested for this email — wait about 9 minutes, then retry"
+        );
+        assert!(rate_limit_message(Some(541)).contains("about 10 minutes"));
+        assert!(rate_limit_message(Some(30)).contains("about a minute"));
+        assert!(rate_limit_message(None).contains("a few minutes"));
+        // The setup wizard matches this prefix — keep it stable.
+        assert!(rate_limit_message(None).starts_with("too many sign-in codes"));
     }
 
     #[test]

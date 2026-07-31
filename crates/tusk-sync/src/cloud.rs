@@ -212,6 +212,18 @@ impl CloudClient {
     }
 }
 
+/// The delta-seconds form of a `Retry-After` header, if present. The
+/// HTTP-date form is ignored — tusk-cloud only ever sends seconds.
+fn retry_after_secs(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
 fn decode_b64(value: &str) -> Result<Vec<u8>, SyncError> {
     B64.decode(value)
         .map_err(|_| SyncError::Storage("invalid base64 in server response".to_string()))
@@ -658,6 +670,12 @@ impl AccountClient {
         let resp = request
             .send()
             .map_err(|e| SyncError::Storage(format!("request to {url}: {e}")))?;
+        if resp.status().as_u16() == 429 {
+            return Err(SyncError::RateLimited {
+                retry_after_secs: retry_after_secs(resp.headers()),
+                url,
+            });
+        }
         if !resp.status().is_success() {
             return Err(SyncError::Http {
                 status: resp.status().as_u16(),

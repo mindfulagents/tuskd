@@ -65,6 +65,16 @@ fn one_shot_server(
     status_line: &'static str,
     body: &'static str,
 ) -> (String, mpsc::Receiver<RawRequest>) {
+    one_shot_server_with(status_line, "", body)
+}
+
+/// Like [`one_shot_server`], with extra response header lines (each
+/// `\r\n`-terminated, e.g. `"retry-after: 540\r\n"`).
+fn one_shot_server_with(
+    status_line: &'static str,
+    extra_headers: &'static str,
+    body: &'static str,
+) -> (String, mpsc::Receiver<RawRequest>) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind ephemeral");
     let addr = listener.local_addr().expect("local addr");
     let (tx, rx) = mpsc::channel();
@@ -72,7 +82,7 @@ fn one_shot_server(
         let (mut stream, _) = listener.accept().expect("accept");
         let request = read_request(&mut stream);
         let response = format!(
-            "HTTP/1.1 {status_line}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+            "HTTP/1.1 {status_line}\r\ncontent-type: application/json\r\n{extra_headers}content-length: {}\r\nconnection: close\r\n\r\n{body}",
             body.len()
         );
         stream
@@ -467,6 +477,37 @@ fn list_repos_sends_the_bearer_and_parses() {
     let request = rx.recv().expect("captured request");
     assert_eq!(request.start_line, "GET /v1/repos HTTP/1.1");
     assert_eq!(request.header("authorization"), "Bearer tsks_abc");
+}
+
+#[test]
+fn throttled_auth_start_carries_the_servers_retry_after() {
+    let (base, _rx) = one_shot_server_with(
+        "429 Too Many Requests",
+        "retry-after: 540\r\n",
+        r#"{"error":"too many sign-in codes requested; wait before retrying"}"#,
+    );
+    let client = tusk_sync::AccountClient::new(&base, None).expect("client");
+    match client.auth_start("user@example.com").expect_err("429") {
+        tusk_sync::SyncError::RateLimited {
+            retry_after_secs, ..
+        } => assert_eq!(retry_after_secs, Some(540)),
+        other => panic!("expected RateLimited, got {other:?}"),
+    }
+}
+
+#[test]
+fn throttled_auth_start_without_retry_after_is_still_rate_limited() {
+    let (base, _rx) = one_shot_server(
+        "429 Too Many Requests",
+        r#"{"error":"too many sign-in codes requested; wait before retrying"}"#,
+    );
+    let client = tusk_sync::AccountClient::new(&base, None).expect("client");
+    match client.auth_start("user@example.com").expect_err("429") {
+        tusk_sync::SyncError::RateLimited {
+            retry_after_secs, ..
+        } => assert_eq!(retry_after_secs, None),
+        other => panic!("expected RateLimited, got {other:?}"),
+    }
 }
 
 #[test]
