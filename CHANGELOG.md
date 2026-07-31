@@ -5,6 +5,35 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## v0.8.0 — 2026-07-31
+
+- **`tuskd setup` — guided onboarding (D36):** one command that walks
+  you from a fresh install to a syncing, client-connected vault. It is
+  a checklist, not a questionnaire: every run derives the remaining
+  steps from on-disk state, so Ctrl-C and rerun resumes where you
+  left off, rerunning on a broken install (expired session, revoked
+  device) lands straight on the broken step, and rerunning on a
+  healthy install just prints status. Joining from a second device
+  gets a numbered repo picker (no UUID copy-paste), the fingerprint
+  ceremony with every approval route spelled out, and a wait loop
+  that auto-pulls the moment the device is approved. Each step echoes
+  the plain command it ran, so the wizard teaches the CLI as it goes.
+  Quickstart is now two lines: `curl -fsSL https://get.opentusk.ai | sh`
+  then `tuskd setup`.
+- **The CLI got a visual design (D35):** tusk-gold and sage brand
+  colors, ✓/✗ semantic states, and human-first output across the
+  board — `tuskd status` is a readable panel with a sync summary,
+  `sync repos` / `review list` / device lists are aligned tables,
+  search results are a ranked list with bolded matches, and pull
+  shows a single in-place progress line. The recovery phrase now
+  renders in a gold box with a shown-exactly-once warning, and the
+  device fingerprint appears in the same 4-char gold groups as the
+  dashboard's devices page, so cross-checking them is a visual diff.
+  Errors are a red `error:` line plus a dim `next:` hint. Everything
+  honors NO_COLOR and TTY detection — piped output is byte-identical
+  to before, so scripts and integrations are untouched (`--json`
+  where you need structure).
+
 ## v0.7.3 — 2026-07-31
 
 - **`tuskd sync rename <name>` (D34):** rename a cloud repo — display
