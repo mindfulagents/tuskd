@@ -419,6 +419,9 @@ fn sync_command(
         }
         SyncCommand::Init { repo_name, name } => crate::sync_cloud::init(vault, repo_name, name),
         SyncCommand::Repos => crate::sync_cloud::repos(vault),
+        SyncCommand::DeleteRepo { repo_id, yes } => {
+            crate::sync_cloud::delete_repo(vault, &repo_id, yes)
+        }
         SyncCommand::Connect {
             url,
             repo,

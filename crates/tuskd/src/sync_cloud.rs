@@ -337,6 +337,35 @@ pub fn repos(vault: &Path) -> Result<(), CoreError> {
     Ok(())
 }
 
+/// `tuskd sync delete-repo` — permanently delete an owned cloud repo
+/// (D31). Cloud-side only: local files stay; if this vault was connected
+/// to the deleted repo its connection state is cleared so `init` or
+/// `connect` starts clean.
+pub fn delete_repo(vault: &Path, repo_id: &str, yes: bool) -> Result<(), CoreError> {
+    if !yes {
+        return Err(CoreError::Other(
+            "deleting a cloud repo is permanent (every device loses the cloud copy; \
+             local vaults are untouched) — rerun with --yes to confirm"
+                .into(),
+        ));
+    }
+    let (client, _session) = account_client(vault)?;
+    client.delete_repo(repo_id).map_err(|e| match e {
+        SyncError::Http { status: 404, .. } => {
+            CoreError::Other("no such repo on your account".into())
+        }
+        other => session_expired(other),
+    })?;
+    println!("deleted cloud repo {repo_id}");
+    if let Ok(config) = load_config(vault) {
+        if config.repo_id == repo_id {
+            let _ = std::fs::remove_file(sync_dir(vault).join(CLOUD_CONFIG_FILE));
+            println!("this vault was connected to it — connection cleared (files kept)");
+        }
+    }
+    Ok(())
+}
+
 /// `tuskd sync connect` — enroll this vault's device into an existing repo.
 pub fn connect(
     vault: &Path,
