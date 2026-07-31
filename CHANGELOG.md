@@ -5,6 +5,25 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## v0.7.0 — 2026-07-31
+
+- **Sign in with your email (D29):** `tuskd sync login` — an 8-character
+  code arrives by email, and a 30-day session is stored locally.
+  `tuskd sync init` then creates a cloud repo for the vault (with this
+  machine as its first approved device) and prints the recovery phrase;
+  `tuskd sync repos` lists your repos. Onboarding is now: install →
+  `tuskd init` → `sync login` → `sync init` → done. No tokens to copy.
+- **The vault syncs itself (D28):** on vaults connected to a cloud repo,
+  `tuskd start` runs a background auto-sync worker — incremental,
+  oplog-driven push/pull every 30 s (configurable via `[sync]
+  interval_secs`; disable with `[sync] auto = false`). Conflicts resolve
+  local-wins with re-upload, deletions propagate only for files the
+  device itself synced, and key rotations re-key blob names
+  incrementally. Manual `sync push`/`pull` now share the same
+  incremental engine.
+- **Removed:** the beta `sync bootstrap` verb (D30) — replaced by
+  `sync login` + `sync init`. Existing repos and devices are unaffected.
+
 ## v0.6.0 — 2026-07-30
 
 - **Cloud sync (M1, D21–D27):** end-to-end-encrypted vault sync through
