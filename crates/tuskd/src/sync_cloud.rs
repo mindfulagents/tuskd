@@ -1,6 +1,7 @@
-//! `tuskd sync` cloud verbs (M1, D26): connect / bootstrap / status /
-//! devices / approve / push / pull — the CLI face of the proven pieces in
-//! `tusk-sync` (CloudClient D23, CloudProvider D24, device flow D25).
+//! `tuskd sync` cloud verbs (M1 D26, M2 D29): login / init / repos /
+//! connect / status / devices / approve / push / pull — the CLI face of
+//! the proven pieces in `tusk-sync` (CloudClient D23, CloudProvider D24,
+//! device flow D25, AccountClient D29).
 //!
 //! State lives in `.tusk/sync/` (0700; export- and sync-excluded):
 //! `cloud.json` (server URL + repo/device ids), `device.pem` (D21 device
@@ -49,7 +50,7 @@ pub(crate) fn sync_dir(vault: &Path) -> PathBuf {
 fn load_config(vault: &Path) -> Result<CloudConfig, CoreError> {
     let path = sync_dir(vault).join(CLOUD_CONFIG_FILE);
     let raw = std::fs::read_to_string(&path).map_err(|_| {
-        CoreError::Other("not connected — run `tuskd sync connect` (or bootstrap) first".into())
+        CoreError::Other("not connected — run `tuskd sync init` (or connect) first".into())
     })?;
     serde_json::from_str(&raw)
         .map_err(|e| CoreError::Other(format!("bad {CLOUD_CONFIG_FILE}: {e}")))
@@ -368,75 +369,6 @@ pub fn connect(
         "on an approved device, run: tuskd sync approve {device_id} --fingerprint {fingerprint}"
     );
     Ok(())
-}
-
-/// `tuskd sync bootstrap` — beta path: create account + repo + this device
-/// in one call (C6), generate the repo key, and print the recovery phrase.
-pub fn bootstrap(
-    vault: &Path,
-    url: &str,
-    admin_token: &str,
-    email: &str,
-    repo_name: &str,
-    name: Option<String>,
-) -> Result<(), CoreError> {
-    let key = ensure_device_key(vault)?;
-    let (ed25519, x25519) = device_keys_raw(&key);
-    let body = serde_json::json!({
-        "email": email,
-        "repo_name": repo_name,
-        "device_name": default_name(name),
-        "ed25519_pubkey": data_encoding_b64(&ed25519),
-        "x25519_pubkey": data_encoding_b64(&x25519),
-    });
-    let endpoint = format!("{}/v1/admin/bootstrap", url.trim_end_matches('/'));
-    let http = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| CoreError::Other(format!("http client: {e}")))?;
-    let resp = http
-        .post(&endpoint)
-        .header("authorization", format!("Bearer {admin_token}"))
-        .json(&body)
-        .send()
-        .map_err(|e| CoreError::Other(format!("request to {endpoint}: {e}")))?;
-    if !resp.status().is_success() {
-        return Err(CoreError::Other(format!(
-            "bootstrap failed: HTTP {} — {}",
-            resp.status(),
-            resp.text().unwrap_or_default()
-        )));
-    }
-    #[derive(Deserialize)]
-    struct Ids {
-        repo_id: String,
-        device_id: String,
-    }
-    let ids: Ids = resp
-        .json()
-        .map_err(|e| CoreError::Other(format!("bootstrap response: {e}")))?;
-    save_config(
-        vault,
-        &CloudConfig {
-            url: url.trim_end_matches('/').to_string(),
-            repo_id: ids.repo_id.clone(),
-            device_id: ids.device_id,
-        },
-    )?;
-    let rmk = RepoMasterKey::generate();
-    store_rmk(vault, &rmk, 1)?;
-    println!("repo created: {}", ids.repo_id);
-    println!();
-    println!("RECOVERY PHRASE — write this down; it is shown exactly once:");
-    println!("  {}", rmk.to_mnemonic().map_err(err)?);
-    println!();
-    println!("next: tuskd sync push");
-    Ok(())
-}
-
-fn data_encoding_b64(bytes: &[u8]) -> String {
-    use base64::Engine;
-    base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
 /// `tuskd sync status`.

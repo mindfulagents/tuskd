@@ -425,13 +425,6 @@ fn sync_command(
             name,
             phrase,
         } => crate::sync_cloud::connect(vault, &url, &repo, name, phrase),
-        SyncCommand::Bootstrap {
-            url,
-            admin_token,
-            email,
-            repo_name,
-            name,
-        } => crate::sync_cloud::bootstrap(vault, &url, &admin_token, &email, &repo_name, name),
         SyncCommand::Status => crate::sync_cloud::status(vault),
         SyncCommand::Devices => crate::sync_cloud::devices(vault),
         SyncCommand::Approve {
