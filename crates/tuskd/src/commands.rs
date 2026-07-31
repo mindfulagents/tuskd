@@ -67,13 +67,17 @@ fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> 
             let data = admin_route(
                 vault,
                 &AdminRequest::Search {
-                    query,
+                    query: query.clone(),
                     scopes: scope,
                     as_of,
                     k: Some(k),
                 },
             )?;
-            println!("{}", serde_json::to_string_pretty(&data)?);
+            if crate::style::stdout_is_tty() {
+                print_search_human(&query, &data);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            }
             Ok(())
         }
         Command::Index { command } => match command {
@@ -97,6 +101,8 @@ fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> 
                 let items = data.as_array().cloned().unwrap_or_default();
                 if items.is_empty() {
                     println!("review queue is empty");
+                } else if crate::style::stdout_is_tty() {
+                    print_review_human(&items);
                 } else {
                     for item in items {
                         println!(
@@ -192,6 +198,89 @@ fn print_status_human(vault: &std::path::Path, data: &Value) {
         Some(line) => anstream::println!("  sync     {OK}✓{OK:#} {line}"),
         None => anstream::println!("  sync     {DIM}off — enable: tuskd sync login{DIM:#}"),
     }
+}
+
+/// Human `tuskd search` view (D35): a ranked list with the query terms
+/// bolded inside each snippet. Pipes keep the JSON.
+fn print_search_human(query: &str, data: &Value) {
+    use crate::style::{bold_terms, DIM};
+    let hits = data["hits"].as_array().cloned().unwrap_or_default();
+    if hits.is_empty() {
+        println!("no hits for {query:?}");
+        return;
+    }
+    let terms: Vec<&str> = query.split_whitespace().collect();
+    anstream::println!("{} hit(s) for {query:?}", hits.len());
+    for (i, hit) in hits.iter().enumerate() {
+        let id = hit["id"].as_str().unwrap_or("?");
+        let kind = hit["type"].as_str().unwrap_or("?");
+        let scope = hit["scope"].as_str().unwrap_or("?");
+        let score = hit["score"].as_f64().unwrap_or(0.0);
+        anstream::println!(
+            "{:>2}. {id}  {DIM}{kind} · {scope} · score {score:.2}{DIM:#}",
+            i + 1
+        );
+        let snippet: String = hit["snippet"]
+            .as_str()
+            .unwrap_or("")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .chars()
+            .take(160)
+            .collect();
+        if !snippet.is_empty() {
+            anstream::println!("    {}", bold_terms(&snippet, &terms));
+        }
+    }
+}
+
+/// Human `tuskd review list` view (D35): aligned columns, humanized age.
+fn print_review_human(items: &[Value]) {
+    use crate::style::{human_ago, BOLD, DIM};
+    let col = |v: &Value, path: &[&str]| -> String {
+        let mut cur = v;
+        for key in path {
+            cur = &cur[*key];
+        }
+        cur.as_str().unwrap_or("?").to_string()
+    };
+    let rows: Vec<(String, String, String, String, String)> = items
+        .iter()
+        .map(|item| {
+            let submitted = col(item, &["submitted_at"]);
+            let age = chrono::DateTime::parse_from_rfc3339(&submitted)
+                .map(|t| {
+                    let secs = (chrono::Utc::now() - t.with_timezone(&chrono::Utc)).num_seconds();
+                    human_ago(secs.max(0) as u64)
+                })
+                .unwrap_or(submitted);
+            (
+                col(item, &["qid"]),
+                col(item, &["candidate", "type"]),
+                col(item, &["candidate", "scope"]),
+                col(item, &["author"]),
+                age,
+            )
+        })
+        .collect();
+    let w0 = rows.iter().map(|r| r.0.len()).max().unwrap_or(3);
+    let w1 = rows.iter().map(|r| r.1.len()).max().unwrap_or(4);
+    let w2 = rows.iter().map(|r| r.2.len()).max().unwrap_or(5);
+    let w3 = rows.iter().map(|r| r.3.len()).max().unwrap_or(6);
+    anstream::println!(
+        "{DIM}{:<w0$}  {:<w1$}  {:<w2$}  {:<w3$}  AGE{DIM:#}",
+        "QID",
+        "TYPE",
+        "SCOPE",
+        "AUTHOR"
+    );
+    for (qid, kind, scope, author, age) in rows {
+        anstream::println!(
+            "{BOLD}{qid:<w0$}{BOLD:#}  {kind:<w1$}  {scope:<w2$}  {author:<w3$}  {DIM}{age}{DIM:#}"
+        );
+    }
+    crate::style::hint("next: tuskd review approve <qid>   # or: tuskd review reject <qid>");
 }
 
 /// Last `n` non-empty lines of a log file, indented for error display.

@@ -198,6 +198,15 @@ pub fn push_only(vault: &Path) -> Result<CycleReport, CoreError> {
 /// record the result so a running worker doesn't re-push what was just
 /// pulled.
 pub fn pull_all(vault: &Path) -> Result<usize, CoreError> {
+    pull_all_with(vault, |_, _, _| {})
+}
+
+/// `pull_all` with a per-file progress callback `(done, total, rel_path)`,
+/// invoked before each file is fetched (D35: the CLI's progress line).
+pub fn pull_all_with(
+    vault: &Path,
+    mut on_file: impl FnMut(usize, usize, &str),
+) -> Result<usize, CoreError> {
     let session = open_session(vault)?;
     let dir = sync_dir(vault);
     let table = fetch_table(&session)?
@@ -206,8 +215,10 @@ pub fn pull_all(vault: &Path) -> Result<usize, CoreError> {
         generation: session.generation,
         ..SyncState::default()
     });
+    let total = table.iter().count();
     let mut written = 0usize;
     for (rel, entry) in table.iter() {
+        on_file(written + 1, total, rel);
         let blob = session.provider.get(&entry.blob).map_err(err)?;
         let plaintext = entry
             .dek()

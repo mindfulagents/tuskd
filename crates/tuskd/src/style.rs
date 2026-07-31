@@ -43,6 +43,45 @@ pub const HELP_STYLES: clap::builder::Styles = clap::builder::Styles::styled()
     .literal(BOLD)
     .placeholder(DIM);
 
+/// `fe812c12f3ab4ce6` → `fe81 2c12 f3ab 4ce6` — the exact grouping the
+/// cloud dashboard's devices screen uses, so a human can eye-diff the
+/// two surfaces during the approval ceremony.
+pub fn fingerprint_groups(fingerprint: &str) -> String {
+    fingerprint
+        .as_bytes()
+        .chunks(4)
+        .map(|c| String::from_utf8_lossy(c).into_owned())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Bold every case-insensitive occurrence of the terms, for TTY search
+/// results. Returns the text with embedded styles — print via anstream
+/// on a TTY path only.
+pub fn bold_terms(text: &str, terms: &[&str]) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::new();
+    let mut i = 0;
+    'outer: while i < bytes.len() {
+        for term in terms {
+            let t = term.as_bytes();
+            if !t.is_empty()
+                && i + t.len() <= bytes.len()
+                && bytes[i..i + t.len()].eq_ignore_ascii_case(t)
+                && text.is_char_boundary(i + t.len())
+            {
+                out.push_str(&format!("{BOLD}{}{BOLD:#}", &text[i..i + t.len()]));
+                i += t.len();
+                continue 'outer;
+            }
+        }
+        let ch_len = text[i..].chars().next().map(char::len_utf8).unwrap_or(1);
+        out.push_str(&text[i..i + ch_len]);
+        i += ch_len;
+    }
+    out
+}
+
 /// `1234567` → `1,234,567`.
 pub fn group_thousands(n: i64) -> String {
     let raw = n.abs().to_string();
@@ -135,6 +174,30 @@ mod tests {
         assert_eq!(human_ago(120), "2m ago");
         assert_eq!(human_ago(7200), "2h ago");
         assert_eq!(human_ago(200_000), "2d ago");
+    }
+
+    #[test]
+    fn fingerprints_group_in_fours() {
+        assert_eq!(
+            fingerprint_groups("fe812c12f3ab4ce6"),
+            "fe81 2c12 f3ab 4ce6"
+        );
+        assert_eq!(fingerprint_groups("abcde"), "abcd e");
+        assert_eq!(fingerprint_groups(""), "");
+    }
+
+    #[test]
+    fn terms_are_bolded_case_insensitively() {
+        let out = bold_terms("Alpha beta ALPHA", &["alpha"]);
+        assert_eq!(
+            out.matches("Alpha").count() + out.matches("ALPHA").count(),
+            2
+        );
+        // Both occurrences got the style, the middle word none.
+        assert_eq!(out.matches("\u{1b}[1m").count(), 2);
+        assert!(out.contains(" beta "));
+        // Non-matching text passes through untouched.
+        assert_eq!(bold_terms("plain text", &["zzz"]), "plain text");
     }
 
     #[test]

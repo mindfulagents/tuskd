@@ -496,8 +496,20 @@ async fn default_port_falls_back_but_custom_port_fails_hard() {
         .expect_err("custom port must fail hard");
     assert!(err.to_string().contains(&format!("127.0.0.1:{busy}")));
 
-    // Free port → no fallback.
+    // Free port → no fallback. Another test (they run in parallel) can
+    // grab the port in the drop→rebind window, so retry on a fresh
+    // ephemeral port instead of asserting on one racy attempt.
     drop(occupier);
-    let (_tcp, fell_back) = tuskd::daemon::bind_http(busy, busy).await.expect("rebind");
-    assert!(!fell_back);
+    for attempt in 0.. {
+        let probe = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("probe");
+        let port = probe.local_addr().expect("addr").port();
+        drop(probe);
+        let (_tcp, fell_back) = tuskd::daemon::bind_http(port, port).await.expect("rebind");
+        if !fell_back {
+            break;
+        }
+        assert!(attempt < 5, "no free port stayed free across 5 attempts");
+    }
 }
