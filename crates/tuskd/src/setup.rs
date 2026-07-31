@@ -339,6 +339,47 @@ fn report_outcome(path: &Path, outcome: &Outcome, verb: &str) {
 
 /// Does the client's config already carry an `opentusk` entry?
 /// None = no file, Some(bool) = file exists / entry present.
+/// A client as the wizard sees it (D36).
+pub(crate) struct ClientStatus {
+    pub(crate) name: &'static str,
+    /// Present on this machine, by cheap heuristic (binary on PATH or
+    /// the client's config dir existing).
+    pub(crate) installed: bool,
+    /// Its config already has the opentusk entry.
+    pub(crate) configured: bool,
+}
+
+/// Detect installed AI clients for the wizard's offers. Heuristics only —
+/// a miss is fine (the wizard points at `tuskd agent setup list`).
+pub(crate) fn detect_clients() -> Vec<ClientStatus> {
+    let Ok(home) = home_dir() else {
+        return Vec::new();
+    };
+    ALL_CLIENTS
+        .into_iter()
+        .map(|client| {
+            let path = client.config_path(&home);
+            let installed = match client {
+                Client::ClaudeCode => binary_on_path("claude"),
+                Client::ClaudeDesktop => path.parent().is_some_and(Path::exists),
+                Client::Cursor => home.join(".cursor").is_dir(),
+                Client::Codex => home.join(".codex").is_dir(),
+                Client::Vscode => Path::new(".vscode").is_dir(),
+            };
+            ClientStatus {
+                name: client.name(),
+                installed,
+                configured: read_entry_present(client, &path) == Some(true),
+            }
+        })
+        .collect()
+}
+
+fn binary_on_path(name: &str) -> bool {
+    std::env::var_os("PATH")
+        .is_some_and(|paths| std::env::split_paths(&paths).any(|dir| dir.join(name).is_file()))
+}
+
 fn read_entry_present(client: Client, path: &Path) -> Option<bool> {
     let raw = std::fs::read_to_string(path).ok()?;
     Some(match client {

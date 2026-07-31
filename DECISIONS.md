@@ -694,3 +694,35 @@ with a CLI-side sync summary line, styled `sync status`, red `error:` /
 dim `next:` treatment, help tint) and a follow-up (tables, search list,
 recovery-phrase / fingerprint ceremony boxes, push/pull progress).
 The daemon's tracing logs are deliberately untouched.
+
+## D36 — `tuskd setup`: the onboarding wizard (2026-07-31)
+
+Approved proposal (PLANS/SETUP_WIZARD_PROPOSAL.md, #building thread
+1528b315). One additive verb; the granular verbs stay the scriptable
+surface (`setup` refuses to run without a terminal on stdin+stdout).
+
+Design contracts:
+
+- **Checklist runner, no wizard state file.** Every run derives the
+  remaining steps from on-disk state (vault, daemon socket, session,
+  cloud.json, approval), so the wizard is resumable after Ctrl-C,
+  idempotent on a healthy install, and doubles as a repair tool
+  (expired session / pending approval land on the right step).
+- **Never destructive.** delete-repo and revoke stay manual-only; the
+  plan-cap refusal becomes a menu (join the existing repo / stop with
+  the delete command named) instead of a dead end.
+- **Teaching layer.** Every executed step echoes the equivalent plain
+  command dim (`ran: tuskd sync init`), so the wizard teaches the CLI
+  rather than hiding it.
+- **Ceremony gates.** The recovery phrase requires typing `saved`; the
+  second-device path renders the D35 fingerprint ceremony, offers the
+  recovery-phrase shortcut, and polls for approval (Ctrl-C-safe).
+- Prompting is behind a `Prompt` trait (std + scripted test fake — the
+  same determinism pattern as the `Clock` trait), so wizard branching
+  is unit-tested without a terminal.
+- Client detection is heuristic (binary on PATH / config dir exists);
+  a miss only means the wizard points at `tuskd agent setup list`.
+
+The installer's get-started line and the README/site quickstarts now
+lead with `curl … | sh` + `tuskd setup`; the plain-verb quickstart
+remains alongside (README-verbatim acceptance still holds).

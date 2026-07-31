@@ -109,5 +109,5 @@ case ":$PATH:" in
      say "" ;;
 esac
 
-say "opentusk: get started →  mkdir my-vault && cd my-vault && tuskd init"
+say "opentusk: get started →  mkdir my-vault && cd my-vault && tuskd setup"
 say "opentusk: docs        →  https://opentusk.ai"

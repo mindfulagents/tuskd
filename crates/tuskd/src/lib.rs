@@ -19,3 +19,4 @@ pub mod sync;
 pub mod sync_cloud;
 pub mod sync_state;
 pub mod sync_worker;
+pub mod wizard;
