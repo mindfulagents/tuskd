@@ -582,3 +582,168 @@ impl CloudClient {
         Ok(())
     }
 }
+
+// ---------------------------------------------------------------------------
+// Account plane (tusk-cloud C10; tuskd D29)
+// ---------------------------------------------------------------------------
+
+/// A verified sign-in: the bearer session token plus account facts.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct AccountSession {
+    pub token: String,
+    pub account_id: String,
+    pub email: String,
+    pub plan: String,
+}
+
+/// One repo as listed to its owning account.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct AccountRepo {
+    pub repo_id: String,
+    pub name: String,
+    pub rmk_generation: i32,
+}
+
+#[derive(Deserialize)]
+struct CreateRepoResponse {
+    repo_id: String,
+    device_id: String,
+}
+
+/// Client for the session-authed account plane (C10): emailed sign-in
+/// codes, sessions, and repo management. Distinct from [`CloudClient`] on
+/// purpose — that is the device plane (ed25519, per-repo); this side is a
+/// plain bearer token for a person's account.
+pub struct AccountClient {
+    base_url: String,
+    token: Option<String>,
+    http: reqwest::blocking::Client,
+}
+
+impl AccountClient {
+    pub fn new(
+        base_url: impl Into<String>,
+        token: Option<String>,
+    ) -> Result<AccountClient, SyncError> {
+        let http = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| SyncError::Storage(format!("http client: {e}")))?;
+        let mut base_url = base_url.into();
+        while base_url.ends_with('/') {
+            base_url.pop();
+        }
+        Ok(AccountClient {
+            base_url,
+            token,
+            http,
+        })
+    }
+
+    fn post(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+        authed: bool,
+    ) -> Result<reqwest::blocking::Response, SyncError> {
+        let url = format!("{}{path}", self.base_url);
+        let mut request = self.http.post(&url).json(body);
+        if authed {
+            let token = self
+                .token
+                .as_deref()
+                .ok_or_else(|| SyncError::Storage("not logged in".into()))?;
+            request = request.bearer_auth(token);
+        }
+        let resp = request
+            .send()
+            .map_err(|e| SyncError::Storage(format!("request to {url}: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(SyncError::Http {
+                status: resp.status().as_u16(),
+                url,
+            });
+        }
+        Ok(resp)
+    }
+
+    /// Request a sign-in code for `email`.
+    pub fn auth_start(&self, email: &str) -> Result<(), SyncError> {
+        self.post(
+            "/v1/auth/start",
+            &serde_json::json!({ "email": email }),
+            false,
+        )?;
+        Ok(())
+    }
+
+    /// Exchange the emailed code for a session.
+    pub fn auth_verify(
+        &mut self,
+        email: &str,
+        code: &str,
+        label: &str,
+    ) -> Result<AccountSession, SyncError> {
+        let session: AccountSession = self
+            .post(
+                "/v1/auth/verify",
+                &serde_json::json!({ "email": email, "code": code, "label": label }),
+                false,
+            )?
+            .json()
+            .map_err(|e| SyncError::Storage(format!("verify response: {e}")))?;
+        self.token = Some(session.token.clone());
+        Ok(session)
+    }
+
+    /// Create a repo, registering this device as its first approved device.
+    /// Returns `(repo_id, device_id)`.
+    pub fn create_repo(
+        &self,
+        name: &str,
+        device_name: &str,
+        ed25519_pubkey: &[u8; 32],
+        x25519_pubkey: &[u8; 32],
+    ) -> Result<(String, String), SyncError> {
+        let created: CreateRepoResponse = self
+            .post(
+                "/v1/repos",
+                &serde_json::json!({
+                    "name": name,
+                    "device": {
+                        "name": device_name,
+                        "ed25519_pubkey": B64.encode(ed25519_pubkey),
+                        "x25519_pubkey": B64.encode(x25519_pubkey),
+                    }
+                }),
+                true,
+            )?
+            .json()
+            .map_err(|e| SyncError::Storage(format!("create-repo response: {e}")))?;
+        Ok((created.repo_id, created.device_id))
+    }
+
+    /// The account's repos.
+    pub fn list_repos(&self) -> Result<Vec<AccountRepo>, SyncError> {
+        let path = "/v1/repos";
+        let url = format!("{}{path}", self.base_url);
+        let token = self
+            .token
+            .as_deref()
+            .ok_or_else(|| SyncError::Storage("not logged in".into()))?;
+        let resp = self
+            .http
+            .get(&url)
+            .bearer_auth(token)
+            .send()
+            .map_err(|e| SyncError::Storage(format!("request to {url}: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(SyncError::Http {
+                status: resp.status().as_u16(),
+                url,
+            });
+        }
+        resp.json()
+            .map_err(|e| SyncError::Storage(format!("repos response: {e}")))
+    }
+}

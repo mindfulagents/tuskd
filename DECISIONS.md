@@ -568,3 +568,30 @@ pull-then-push cycle at startup and every `[sync] interval_secs`
   idle cycles touch no write path, conflict convergence, deletion
   propagation with dirty-copy survival, empty-device adoption appending
   zero ops, and the rotation re-key including cross-device idempotence.
+
+## D29 — account login in the CLI: `sync login` / `init` / `repos` (2026-07-31)
+
+The client half of tusk-cloud C10, making onboarding admin-token-free:
+
+- **`tuskd sync login --email <e>`** requests an emailed sign-in code
+  (Resend, C10), prompts for it (or takes `--code` for scripting), and
+  stores the 30-day bearer session at `.tusk/sync/session.json` (0600,
+  export- and sync-excluded like everything else in the sync dir).
+- **`tuskd sync init`** creates a repo under the logged-in account with
+  this vault's device registered as its first approved device (trust
+  rooted in the session — no approved peer exists yet for the
+  fingerprint ceremony), generates the RMK, prints the recovery phrase
+  once. Repo name defaults to the vault directory's name.
+- **`tuskd sync repos`** lists the account's repos for `connect`.
+- **`AccountClient`** lives in tusk-sync beside `CloudClient`, kept
+  deliberately separate: the account plane is a person's bearer token,
+  the device plane stays pure ed25519 — no token ever authorizes a sync
+  operation.
+- **`sync bootstrap` is now legacy**: it remains only until tusk-cloud
+  C6's admin endpoint is deleted (its charter), then the verb goes too.
+- **Verified end-to-end** against a local tusk-cloud on the C10 branch
+  with the real Resend key: a real emailed code → `login --code` →
+  `init` (repo + phrase) → `repos` → `push`/`pull` through the real
+  Spaces bucket with the session-created device authenticating on the
+  device plane. New onboarding is: install → `tuskd init` → `sync
+  login` → `sync init` → done.

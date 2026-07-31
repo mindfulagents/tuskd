@@ -181,6 +181,161 @@ fn default_name(name: Option<String>) -> String {
     })
 }
 
+const SESSION_FILE: &str = "session.json";
+
+/// Persisted account session, `.tusk/sync/session.json` (0600 like every
+/// file in the sync dir; the token is a bearer credential — D29).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredSession {
+    url: String,
+    token: String,
+    email: String,
+}
+
+fn load_session(vault: &Path) -> Result<StoredSession, CoreError> {
+    let path = sync_dir(vault).join(SESSION_FILE);
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|_| CoreError::Other("not logged in — run `tuskd sync login` first".into()))?;
+    serde_json::from_str(&raw).map_err(|e| CoreError::Other(format!("bad {SESSION_FILE}: {e}")))
+}
+
+fn save_session(vault: &Path, session: &StoredSession) -> Result<(), CoreError> {
+    let dir = sync_dir(vault);
+    crate::platform::create_private_dir(&dir)?;
+    let json = serde_json::to_string_pretty(session)
+        .map_err(|e| CoreError::Other(format!("serialize session: {e}")))?;
+    crate::platform::write_private(&dir.join(SESSION_FILE), &json)
+}
+
+fn account_client(vault: &Path) -> Result<(tusk_sync::AccountClient, StoredSession), CoreError> {
+    let session = load_session(vault)?;
+    let client =
+        tusk_sync::AccountClient::new(&session.url, Some(session.token.clone())).map_err(err)?;
+    Ok((client, session))
+}
+
+fn session_expired(e: SyncError) -> CoreError {
+    match e {
+        SyncError::Http { status: 401, .. } => {
+            CoreError::Other("session expired — run `tuskd sync login` again".into())
+        }
+        other => err(other),
+    }
+}
+
+/// `tuskd sync login` — emailed sign-in code → stored session (D29).
+pub fn login(vault: &Path, url: &str, email: &str, code: Option<String>) -> Result<(), CoreError> {
+    let mut client = tusk_sync::AccountClient::new(url, None).map_err(err)?;
+    let code = match code {
+        Some(code) => code,
+        None => {
+            client.auth_start(email).map_err(|e| match e {
+                SyncError::Http { status: 429, .. } => CoreError::Other(
+                    "too many sign-in codes requested for this email — wait a bit".into(),
+                ),
+                other => err(other),
+            })?;
+            println!("sign-in code sent to {email} — enter it below");
+            print!("code: ");
+            use std::io::Write;
+            std::io::stdout()
+                .flush()
+                .map_err(|e| CoreError::Other(format!("stdout: {e}")))?;
+            let mut line = String::new();
+            std::io::stdin()
+                .read_line(&mut line)
+                .map_err(|e| CoreError::Other(format!("read code: {e}")))?;
+            line.trim().to_string()
+        }
+    };
+    let session = client
+        .auth_verify(email, &code, &default_name(None))
+        .map_err(|e| match e {
+            SyncError::Http { status: 401, .. } => CoreError::Other(
+                "code rejected (wrong, expired, or used) — request a new one".into(),
+            ),
+            other => err(other),
+        })?;
+    save_session(
+        vault,
+        &StoredSession {
+            url: url.trim_end_matches('/').to_string(),
+            token: session.token.clone(),
+            email: session.email.clone(),
+        },
+    )?;
+    println!("logged in as {} ({} plan)", session.email, session.plan);
+    println!("next: tuskd sync init   # create a cloud repo for this vault");
+    Ok(())
+}
+
+/// `tuskd sync init` — create a repo under the logged-in account with this
+/// vault's device as its first approved device; the self-serve successor
+/// to `sync bootstrap` (D29).
+pub fn init(
+    vault: &Path,
+    repo_name: Option<String>,
+    name: Option<String>,
+) -> Result<(), CoreError> {
+    let (client, session) = account_client(vault)?;
+    let repo_name = match repo_name {
+        Some(name) => name,
+        None => vault
+            .canonicalize()
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .unwrap_or_else(|| "vault".to_string()),
+    };
+    let key = ensure_device_key(vault)?;
+    let (ed25519, x25519) = device_keys_raw(&key);
+    let (repo_id, device_id) = client
+        .create_repo(&repo_name, &default_name(name), &ed25519, &x25519)
+        .map_err(|e| match e {
+            SyncError::Http { status: 403, .. } => CoreError::Other(
+                "repo limit reached for your plan (or session lacks access)".into(),
+            ),
+            SyncError::Http { status: 409, .. } => {
+                CoreError::Other(format!("you already have a repo named {repo_name:?}"))
+            }
+            other => session_expired(other),
+        })?;
+    save_config(
+        vault,
+        &CloudConfig {
+            url: session.url.clone(),
+            repo_id: repo_id.clone(),
+            device_id,
+        },
+    )?;
+    let rmk = RepoMasterKey::generate();
+    store_rmk(vault, &rmk, 1)?;
+    println!("repo created: {repo_id} ({repo_name})");
+    println!();
+    println!("RECOVERY PHRASE — write this down; it is shown exactly once:");
+    println!("  {}", rmk.to_mnemonic().map_err(err)?);
+    println!();
+    println!("next: tuskd sync push   # or just run the daemon — it syncs automatically");
+    Ok(())
+}
+
+/// `tuskd sync repos` — list the account's repos (D29).
+pub fn repos(vault: &Path) -> Result<(), CoreError> {
+    let (client, session) = account_client(vault)?;
+    let repos = client.list_repos().map_err(session_expired)?;
+    if repos.is_empty() {
+        println!("no repos yet — run `tuskd sync init`");
+        return Ok(());
+    }
+    println!("repos of {}:", session.email);
+    for repo in repos {
+        println!(
+            "{}  gen {}  {}",
+            repo.repo_id, repo.rmk_generation, repo.name
+        );
+    }
+    Ok(())
+}
+
 /// `tuskd sync connect` — enroll this vault's device into an existing repo.
 pub fn connect(
     vault: &Path,
