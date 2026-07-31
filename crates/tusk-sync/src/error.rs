@@ -37,6 +37,15 @@ pub enum SyncError {
     #[error("http {status} for {url}")]
     Http { status: u16, url: String },
 
+    /// HTTP 429 — the server refused to send another sign-in code (or
+    /// otherwise throttled the account plane). `retry_after_secs` is the
+    /// server's `Retry-After` header when it sends one.
+    #[error("rate limited by {url}")]
+    RateLimited {
+        retry_after_secs: Option<u64>,
+        url: String,
+    },
+
     #[error("serialize: {0}")]
     Serde(#[from] serde_json::Error),
 }

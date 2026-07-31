@@ -742,3 +742,27 @@ user-facing behavior get a matching website PR.
 provenance for those artifacts. The old artifact URLs under
 `opentusk.ai/releases/` already 302 to GitHub Releases since the
 DigitalOcean migration, so hosting is unchanged by this cleanup.
+
+## D38 — the sign-in throttle is not a dead end (2026-07-31)
+
+Reported live (#building thread 1528b315): a second-machine `tuskd
+setup` hit the server's sign-in-code send limit and the wizard died on
+the spot with "wait a bit" — no wait time, no way forward, mid-
+onboarding. Two truths make that exit needless: codes already emailed
+stay valid for 10 minutes regardless of the send limit, and `sync
+login --code` verifies without requesting a send at all.
+
+Three changes, client-side only (the server's limits are tusk-cloud's
+C16):
+
+- tusk-sync surfaces account-plane 429s as a dedicated
+  `SyncError::RateLimited` carrying the server's `Retry-After` seconds
+  when present (parsed opportunistically — the header is optional).
+- `sync login` renders that as a concrete wait ("wait about 9 minutes")
+  when the server says, "a few minutes" when it doesn't. The "too many
+  sign-in codes" message prefix is stable: the wizard matches on it,
+  the same pattern as the plan-cap menu.
+- The wizard's cloud step catches the throttle and offers to enter a
+  code from an email that already arrived; declining ends the step
+  cleanly with the resume hint instead of an error — rerunning
+  `tuskd setup` lands right back on sign-in.
