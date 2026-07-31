@@ -16,6 +16,8 @@ pub struct Cli {
 pub enum Command {
     /// Initialize a new vault in the current directory
     Init,
+    /// Guided setup: vault, daemon, AI clients, cloud sync (interactive)
+    Setup,
     /// Start the daemon (owns index + watcher; serves MCP-HTTP, /status, UDS)
     Start {
         /// Run in the background, logging to .tusk/daemon.log

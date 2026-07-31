@@ -27,6 +27,17 @@ pub fn run(cli: Cli) -> i32 {
 fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> {
     match command {
         Command::Init => init(vault),
+        Command::Setup => {
+            use std::io::IsTerminal;
+            if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+                return Err(CoreError::Other(
+                    "tuskd setup is interactive and needs a terminal — script with the \
+                     plain verbs instead (tuskd init, sync login, sync init, …)"
+                        .into(),
+                ));
+            }
+            crate::wizard::run(vault, &mut crate::wizard::StdPrompt)
+        }
         Command::Start { detach } => {
             if detach {
                 start_detached(vault)
@@ -320,7 +331,7 @@ pub(crate) fn init(vault: &std::path::Path) -> Result<(), CoreError> {
 
 /// `tuskd start --detach` (D18): spawn the daemon in its own process group
 /// with output in `.tusk/daemon.log`, then wait until its socket answers.
-fn start_detached(vault: &std::path::Path) -> Result<(), CoreError> {
+pub(crate) fn start_detached(vault: &std::path::Path) -> Result<(), CoreError> {
     let cfg = config::load(vault)?;
     if UnixStream::connect(&cfg.uds_path).is_ok() {
         return Err(CoreError::Other(

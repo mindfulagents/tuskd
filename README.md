@@ -38,6 +38,16 @@ change).
 
 ## Quickstart
 
+The guided path — vault, daemon, AI clients, and (optionally) cloud sync
+in one interactive command:
+
+```sh
+mkdir demo-vault && cd demo-vault
+tuskd setup
+```
+
+The same steps as plain verbs:
+
 ```sh
 # (or build from source: cargo build --release; Rust stable — macOS arm64/x86_64, Linux musl arm64/x86_64)
 export PATH="$HOME/.local/bin:$PATH"

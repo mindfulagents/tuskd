@@ -634,6 +634,22 @@ pub fn connect(
     Ok(())
 }
 
+/// This vault's cloud connection, if configured (probe for the wizard).
+pub(crate) fn connection(vault: &Path) -> Option<CloudConfig> {
+    load_config(vault).ok()
+}
+
+/// The logged-in account email, if a session is stored (wizard probe).
+pub(crate) fn session_email(vault: &Path) -> Option<String> {
+    load_session(vault).ok().map(|s| s.email)
+}
+
+/// The account's repos, unprinted (the wizard's repo picker).
+pub(crate) fn account_repos(vault: &Path) -> Result<Vec<tusk_sync::AccountRepo>, CoreError> {
+    let (client, _) = account_client(vault)?;
+    client.list_repos().map_err(session_expired)
+}
+
 /// One-line sync summary for the human status panel (D35): `None` when
 /// this vault has no cloud connection configured.
 pub(crate) fn summary_line(vault: &Path) -> Option<String> {
