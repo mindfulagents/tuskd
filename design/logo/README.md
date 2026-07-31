@@ -9,7 +9,7 @@ off-grid, excavated intact later — drawn as an engraved natural-history plate 
 the site's field-journal aesthetic (Charter serif + mono labels). Amber is tusk ivory
 *and* fossil resin: the thing that preserves. Palette names follow the dig-site theme:
 Tar, Soot, Umber, Ash, Bone, Tusk Amber, Deep Tusk, Lichen — all already shipping on
-opentusk.ai (`site/index.html` CSS vars).
+opentusk.ai (CSS vars in the `mindfulagents/opentusk-ai` repo).
 
 ## Files
 

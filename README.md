@@ -32,9 +32,9 @@ release with `TUSKD_VERSION=v0.1.0`.
 **Full documentation lives at [opentusk.ai/docs](https://opentusk.ai/docs)** —
 install options, agents & grants, the memory model, the gate, MCP tools, CLI,
 dashboard, configuration, and operations. [opentusk.ai](https://opentusk.ai)
-is the intro + quickstart; page sources are `site/index.html` and
-`site/docs.html` (keep both in lockstep with this README when contracts
-change).
+is the intro + quickstart; page sources live in the website repo,
+[`mindfulagents/opentusk-ai`](https://github.com/mindfulagents/opentusk-ai)
+(keep its docs in lockstep with this README when contracts change).
 
 ## Quickstart
 
@@ -188,10 +188,10 @@ git tag v<V> && git push origin v<V>
 ```
 
 Release config lives in `dist-workspace.toml`; regenerate the workflow with
-`dist generate` after editing it. `site/` is the public web presence:
-`index.html` (opentusk.ai), `docs.html`, and `install.sh` (served at
-get.opentusk.ai) — deploy site changes with `./scripts/deploy-site.sh`
-(needs `.env.deploy`). Pre-0.5.0 artifacts remain immutable under
+`dist generate` after editing it. The opentusk.ai website and the
+get.opentusk.ai installer live in their own repo
+(github.com/mindfulagents/opentusk-ai) and auto-deploy from there — this
+repo carries no website (D37). Pre-0.5.0 artifacts remain immutable under
 `site/releases/`; hosting history is in `DECISIONS.md` D15, the release
 pipeline in D19.
 

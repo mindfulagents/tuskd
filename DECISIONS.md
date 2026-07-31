@@ -726,3 +726,19 @@ Design contracts:
 The installer's get-started line and the README/site quickstarts now
 lead with `curl … | sh` + `tuskd setup`; the plain-verb quickstart
 remains alongside (README-verbatim acceptance still holds).
+
+## D37 — the website lives in its own repo (2026-07-31)
+
+`site/` began as the whole public web presence (D15) and stayed behind as
+a full copy after the website moved to `mindfulagents/opentusk-ai` and
+DigitalOcean App Platform. The copy was a footgun: the v0.8.0 release
+updated it while the real site got nothing. The website files and
+`scripts/deploy-site.sh` are deleted; website work happens only in the
+website repo, which auto-deploys on merge, and release PRs that change
+user-facing behavior get a matching website PR.
+
+`site/releases/` stays: it is the immutable pre-0.5.0 artifact archive
+(D15, D19), now with a pointer README. `scripts/release.sh` stays as
+provenance for those artifacts. The old artifact URLs under
+`opentusk.ai/releases/` already 302 to GitHub Releases since the
+DigitalOcean migration, so hosting is unchanged by this cleanup.
