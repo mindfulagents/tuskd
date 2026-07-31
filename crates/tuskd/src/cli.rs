@@ -204,6 +204,14 @@ pub enum SyncCommand {
     },
     /// List your account's cloud repos (requires `sync login` first)
     Repos,
+    /// Rename a cloud repo (display name only; the repo id never changes)
+    Rename {
+        /// The new name
+        name: String,
+        /// Repo id (defaults to the repo this vault is connected to)
+        #[arg(long)]
+        repo: Option<String>,
+    },
     /// Permanently delete a cloud repo you own (the local vault is untouched)
     DeleteRepo {
         repo_id: String,

@@ -182,6 +182,75 @@ fn default_name(name: Option<String>) -> String {
     })
 }
 
+/// Basenames that carry no signal as a repo name (D34) — lowercase.
+const GENERIC_REPO_NAMES: &[&str] = &["tmp", "temp", "test", "tests", "scratch", "untitled", "new"];
+
+/// D34: does this basename deserve to be a repo name on its own? At
+/// least three alphanumeric characters and not a generic junk word — a
+/// repo named "a" should only ever happen by explicit choice.
+fn looks_like_a_name(s: &str) -> bool {
+    s.chars().filter(|c| c.is_alphanumeric()).count() >= 3
+        && !GENERIC_REPO_NAMES.contains(&s.to_ascii_lowercase().as_str())
+}
+
+/// D34: derive a defensible default repo name from the vault path. The
+/// basename wins when it looks like a name; a junk basename gets its
+/// parent prefixed for signal (`projects/a` → `projects-a`); the home
+/// directory (whose basename is just the username) and unresolvable
+/// paths fall back to "vault".
+fn derive_repo_name(vault: &Path) -> String {
+    let fallback = || "vault".to_string();
+    let Ok(canonical) = vault.canonicalize() else {
+        return fallback();
+    };
+    if let Some(home) = std::env::var_os("HOME") {
+        if Path::new(&home).canonicalize().ok().as_deref() == Some(&canonical) {
+            return fallback();
+        }
+    }
+    let Some(base) = canonical
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+    else {
+        return fallback();
+    };
+    if looks_like_a_name(&base) {
+        return base;
+    }
+    let parent = canonical
+        .parent()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().into_owned());
+    match parent {
+        Some(parent) if looks_like_a_name(&parent) => format!("{parent}-{base}"),
+        _ => fallback(),
+    }
+}
+
+/// D34: ask on a TTY with an editable default (empty answer keeps it);
+/// non-interactive runs keep the default silently, so scripts and CI
+/// behave exactly as before.
+fn prompt_default(label: &str, default: &str) -> Result<String, CoreError> {
+    use std::io::{IsTerminal, Write};
+    if !std::io::stdin().is_terminal() {
+        return Ok(default.to_string());
+    }
+    print!("{label} [{default}]: ");
+    std::io::stdout()
+        .flush()
+        .map_err(|e| CoreError::Other(format!("stdout: {e}")))?;
+    let mut line = String::new();
+    std::io::stdin()
+        .read_line(&mut line)
+        .map_err(|e| CoreError::Other(format!("read name: {e}")))?;
+    let answer = line.trim();
+    Ok(if answer.is_empty() {
+        default.to_string()
+    } else {
+        answer.to_string()
+    })
+}
+
 const SESSION_FILE: &str = "session.json";
 
 /// Persisted account session, `.tusk/sync/session.json` (0600 like every
@@ -281,11 +350,9 @@ pub fn init(
     let (client, session) = account_client(vault)?;
     let repo_name = match repo_name {
         Some(name) => name,
-        None => vault
-            .canonicalize()
-            .ok()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-            .unwrap_or_else(|| "vault".to_string()),
+        // D34: derive a guard-railed default and confirm it on a TTY
+        // instead of silently committing whatever the folder is called.
+        None => prompt_default("Repo name", &derive_repo_name(vault))?,
     };
     let key = ensure_device_key(vault)?;
     let (ed25519, x25519) = device_keys_raw(&key);
@@ -363,6 +430,40 @@ pub fn delete_repo(vault: &Path, repo_id: &str, yes: bool) -> Result<(), CoreErr
             println!("this vault was connected to it — connection cleared (files kept)");
         }
     }
+    Ok(())
+}
+
+/// `tuskd sync rename` — rename a cloud repo (D34; server side is
+/// tusk-cloud C15). Display metadata only: the repo id, devices, and
+/// key material are untouched. Defaults to the repo this vault is
+/// connected to; `--repo` targets any owned repo.
+pub fn rename(vault: &Path, name: &str, repo: Option<String>) -> Result<(), CoreError> {
+    let (client, _session) = account_client(vault)?;
+    let repo_id = match repo {
+        Some(id) => id,
+        None => load_config(vault)
+            .map(|config| config.repo_id)
+            .map_err(|_| {
+                CoreError::Other(
+                    "this vault is not connected to a repo — pass --repo <id> \
+                     (see `tuskd sync repos`)"
+                        .into(),
+                )
+            })?,
+    };
+    client.rename_repo(&repo_id, name).map_err(|e| match e {
+        SyncError::Http { status: 404, .. } => {
+            CoreError::Other("no such repo on your account".into())
+        }
+        SyncError::Http { status: 409, .. } => {
+            CoreError::Other(format!("you already have a repo named {name:?}"))
+        }
+        SyncError::Http { status: 400, .. } => {
+            CoreError::Other("repo name must be 1-100 characters".into())
+        }
+        other => session_expired(other),
+    })?;
+    println!("renamed repo {repo_id} to {name:?}");
     Ok(())
 }
 
@@ -648,4 +749,48 @@ pub fn revoke(vault: &Path, device_id: &str) -> Result<(), CoreError> {
     println!("NEW RECOVERY PHRASE — the old one is now useless; write this down:");
     println!("  {}", rmk_new.to_mnemonic().map_err(err)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn junk_basenames_are_not_names() {
+        for junk in [
+            "a", "ab", "..", "-", "tmp", "TMP", "test", "untitled", "new",
+        ] {
+            assert!(!looks_like_a_name(junk), "{junk:?} accepted");
+        }
+        for good in ["notes", "my-vault", "work2026", "hq-docs"] {
+            assert!(looks_like_a_name(good), "{good:?} rejected");
+        }
+    }
+
+    #[test]
+    fn derive_prefers_basename_then_parent_then_vault() {
+        let root = tempfile::tempdir().unwrap();
+        let projects = root.path().join("projects");
+        let single = projects.join("a");
+        std::fs::create_dir_all(&single).unwrap();
+        // A junk basename picks up its parent for signal.
+        assert_eq!(derive_repo_name(&single), "projects-a");
+        // A decent basename wins outright.
+        assert_eq!(derive_repo_name(&projects), "projects");
+        // Junk all the way up falls back to "vault".
+        let deep = root.path().join("x").join("y");
+        std::fs::create_dir_all(&deep).unwrap();
+        assert_eq!(derive_repo_name(&deep), "vault");
+        // A path that doesn't resolve falls back too.
+        assert_eq!(derive_repo_name(Path::new("/no/such/path/here")), "vault");
+    }
+
+    #[test]
+    fn home_directory_is_never_the_default_name() {
+        if let Some(home) = std::env::var_os("HOME") {
+            if Path::new(&home).canonicalize().is_ok() {
+                assert_eq!(derive_repo_name(Path::new(&home)), "vault");
+            }
+        }
+    }
 }
