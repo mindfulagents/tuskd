@@ -613,3 +613,26 @@ delete-repo <id> --yes` deletes the cloud copy only — local vaults are
 never touched — and clears this vault's connection state if it pointed
 at the deleted repo. `--yes` is mandatory; there is no interactive
 bypass for a permanent deletion.
+
+## D32 — second-vault boot UX: default-port fallback + surfaced errors (2026-07-31)
+
+Found live during the owner's first two-machine run: a second vault's
+`tuskd start -d` died because an older daemon owned the stock port
+7477, the real error sat in daemon.log behind a "see the log" message,
+and the D28 sync worker's startup line preceded the bind failure in the
+log. Fixes:
+
+- **Stock port falls back**: when the configured port equals the
+  default (7477) and is busy, the daemon binds an ephemeral port and
+  says so ("port 7477 is taken (another vault's daemon?) — using …").
+  A *custom* port still fails hard — the user asked for that port and
+  deserves the truth. Keyed off the port value, not config provenance,
+  because `tuskd init` writes `http_port = 7477` literally.
+- **`start -d` shows the failure**: on boot timeout the last lines of
+  daemon.log ride along in the CLI error instead of a pointer to it.
+- **Worker after listeners**: the auto-sync worker now spawns only once
+  both listeners are bound — a daemon that fails to boot has never
+  started syncing.
+- Reproduced and verified on this machine (which also runs a 7477
+  daemon): a default-config scratch vault previously failed identically
+  and now boots on an ephemeral port with the notice.
