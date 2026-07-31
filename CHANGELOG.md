@@ -5,6 +5,20 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## v0.7.3 — 2026-07-31
+
+- **`tuskd sync rename <name>` (D34):** rename a cloud repo — display
+  name only; the repo id, devices, and key material never change.
+  Defaults to the repo this vault is connected to; `--repo <id>`
+  targets any repo you own. The dashboard repo card gained a matching
+  rename button (tusk-cloud C15).
+- **`tuskd sync init` asks before naming the repo (D34):** on a
+  terminal it prompts `Repo name [<default>]:` instead of silently
+  using the folder's name, and junk basenames (one letter, `tmp`,
+  `test`, …) no longer become repo names by accident — the parent
+  folder is prefixed for signal (`projects/a` → `projects-a`).
+  Scripts, CI, and `--repo-name` behave exactly as before.
+
 ## v0.7.2 — 2026-07-31
 
 - **`tuskd sync connect` no longer requires `--url` (D33):** it uses
