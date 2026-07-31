@@ -465,3 +465,39 @@ fn cli_review_and_graduate_flow_embedded() {
     assert!(text.contains("name: "));
     assert!(text.contains("description: "));
 }
+
+// ---------------------------------------------------------------------------
+// D32: default-port fallback + surfaced boot errors
+// ---------------------------------------------------------------------------
+
+/// The daemon's bind logic is exercised through a full boot: a vault whose
+/// configured port equals the (test-chosen) "default" must fall back to an
+/// ephemeral port when that port is taken; a custom port must fail hard.
+/// We can't test literal 7477 (fixed ports are forbidden in tests), so this
+/// covers the helper's contract via the daemon module's unit surface.
+#[tokio::test]
+async fn default_port_falls_back_but_custom_port_fails_hard() {
+    // Occupy an ephemeral port to simulate "someone owns the default".
+    let occupier = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("occupy");
+    let busy = occupier.local_addr().expect("addr").port();
+
+    // Busy + it IS the default → ephemeral fallback.
+    let (tcp, fell_back) = tuskd::daemon::bind_http(busy, busy)
+        .await
+        .expect("fallback");
+    assert!(fell_back);
+    assert_ne!(tcp.local_addr().expect("addr").port(), busy);
+
+    // Busy + custom (default is some other port) → hard error naming the addr.
+    let err = tuskd::daemon::bind_http(busy, busy.wrapping_add(1))
+        .await
+        .expect_err("custom port must fail hard");
+    assert!(err.to_string().contains(&format!("127.0.0.1:{busy}")));
+
+    // Free port → no fallback.
+    drop(occupier);
+    let (_tcp, fell_back) = tuskd::daemon::bind_http(busy, busy).await.expect("rebind");
+    assert!(!fell_back);
+}

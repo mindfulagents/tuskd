@@ -145,6 +145,21 @@ fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> 
     }
 }
 
+/// Last `n` non-empty lines of a log file, indented for error display.
+/// Empty string when the file is missing or empty.
+pub(crate) fn log_tail(path: &std::path::Path, n: usize) -> String {
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        return String::new();
+    };
+    let lines: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).collect();
+    lines
+        .iter()
+        .skip(lines.len().saturating_sub(n))
+        .map(|l| format!("  {l}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(crate) fn init(vault: &std::path::Path) -> Result<(), CoreError> {
     std::fs::create_dir_all(vault).map_err(|e| CoreError::io(vault.display().to_string(), e))?;
     for sub in ["memory", "skills", ".tusk"] {
@@ -181,8 +196,16 @@ fn start_detached(vault: &std::path::Path) -> Result<(), CoreError> {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while UnixStream::connect(&cfg.uds_path).is_err() {
         if std::time::Instant::now() > deadline {
+            // D32: put the actual failure in front of the user instead of
+            // sending them to the log file.
+            let tail = log_tail(&log, 3);
+            let detail = if tail.is_empty() {
+                String::new()
+            } else {
+                format!("\n{tail}")
+            };
             return Err(CoreError::Other(format!(
-                "daemon (pid {pid}) did not come up within 10s — see {}",
+                "daemon (pid {pid}) did not come up within 10s — {}:{detail}",
                 log.display()
             )));
         }
@@ -437,5 +460,17 @@ fn sync_command(
         SyncCommand::Revoke { device_id } => crate::sync_cloud::revoke(vault, &device_id),
         SyncCommand::Push => crate::sync_cloud::push(vault),
         SyncCommand::Pull => crate::sync_cloud::pull(vault),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn log_tail_returns_last_nonempty_lines_indented() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("daemon.log");
+        assert_eq!(super::log_tail(&path, 3), "");
+        std::fs::write(&path, "one\n\ntwo\nthree\nfour\n").unwrap();
+        assert_eq!(super::log_tail(&path, 2), "  three\n  four");
     }
 }

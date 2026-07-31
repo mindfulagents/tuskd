@@ -29,21 +29,10 @@ pub fn run(config: Config) -> Result<(), CoreError> {
     let ctx = Arc::clone(&host.ctx);
     let config = Arc::new(config);
 
-    // D28: auto-sync worker — a plain thread (the sync clients are
-    // blocking HTTP), started only when this vault is connected to a
-    // cloud repo and `[sync] auto` is not disabled.
-    let sync_worker = if config.sync_auto && crate::sync_worker::is_connected(&config.vault) {
-        eprintln!(
-            "sync: auto-sync every {}s (disable with [sync] auto = false)",
-            config.sync_interval_secs
-        );
-        Some(crate::sync_worker::SyncWorker::spawn(
-            config.vault.clone(),
-            std::time::Duration::from_secs(config.sync_interval_secs),
-        ))
-    } else {
-        None
-    };
+    // D28 auto-sync worker handle; spawned inside the async block only
+    // after both listeners bind (D32 — a daemon that fails to boot must
+    // not have started syncing).
+    let mut sync_worker: Option<crate::sync_worker::SyncWorker> = None;
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -56,14 +45,21 @@ pub fn run(config: Config) -> Result<(), CoreError> {
         let uds = UnixListener::bind(&config.uds_path)
             .map_err(|e| CoreError::io(config.uds_path.display().to_string(), e))?;
 
-        // HTTP listener; port 0 = ephemeral.
-        let addr = format!("127.0.0.1:{}", config.http_port);
-        let tcp = tokio::net::TcpListener::bind(&addr)
-            .await
-            .map_err(|e| CoreError::Other(format!("bind {addr}: {e}")))?;
+        // HTTP listener; port 0 = ephemeral. The stock default port falls
+        // back to an ephemeral one when busy (D32) — a second vault on
+        // one machine must not die on the first vault's port.
+        let (tcp, fell_back) =
+            bind_http(config.http_port, crate::config::DEFAULT_HTTP_PORT).await?;
         let actual = tcp
             .local_addr()
             .map_err(|e| CoreError::Other(format!("local_addr: {e}")))?;
+        if fell_back {
+            eprintln!(
+                "port {} is taken (another vault's daemon?) — using {actual} instead; \
+                 set http_port in .tusk/tuskd.toml to pin one",
+                config.http_port
+            );
+        }
 
         // Operator token for the dashboard (D14): minted per daemon run,
         // written owner-only to .tusk/admin-token before the banner.
@@ -126,6 +122,21 @@ pub fn run(config: Config) -> Result<(), CoreError> {
             });
         }
 
+        // D28: auto-sync worker — a plain thread (the sync clients are
+        // blocking HTTP), started only when this vault is connected to a
+        // cloud repo and `[sync] auto` is not disabled. Spawned only now,
+        // with both listeners bound.
+        if config.sync_auto && crate::sync_worker::is_connected(&config.vault) {
+            eprintln!(
+                "sync: auto-sync every {}s (disable with [sync] auto = false)",
+                config.sync_interval_secs
+            );
+            sync_worker = Some(crate::sync_worker::SyncWorker::spawn(
+                config.vault.clone(),
+                std::time::Duration::from_secs(config.sync_interval_secs),
+            ));
+        }
+
         // Shutdown request channel (D18): `tuskd stop` over UDS.
         let stop = Arc::new(tokio::sync::Notify::new());
 
@@ -160,6 +171,26 @@ pub fn run(config: Config) -> Result<(), CoreError> {
     host.shutdown();
     eprintln!("tuskd: shut down cleanly");
     result
+}
+
+/// Bind the HTTP listener. When the *stock* default port is busy, fall
+/// back to an ephemeral port (returning `fell_back = true`); a custom
+/// port fails hard — the user asked for that port and deserves the truth.
+pub async fn bind_http(
+    port: u16,
+    default_port: u16,
+) -> Result<(tokio::net::TcpListener, bool), CoreError> {
+    let addr = format!("127.0.0.1:{port}");
+    match tokio::net::TcpListener::bind(&addr).await {
+        Ok(tcp) => Ok((tcp, false)),
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse && port == default_port => {
+            let tcp = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .map_err(|e| CoreError::Other(format!("bind 127.0.0.1:0: {e}")))?;
+            Ok((tcp, true))
+        }
+        Err(e) => Err(CoreError::Other(format!("bind {addr}: {e}"))),
+    }
 }
 
 async fn shutdown_signal(stop: Arc<tokio::sync::Notify>) {
