@@ -339,6 +339,82 @@ pub fn login(vault: &Path, url: &str, email: &str, code: Option<String>) -> Resu
     Ok(())
 }
 
+/// The recovery-phrase ceremony (D35): a gold box with the phrase in
+/// tidy plain columns on a TTY; the exact pre-D35 lines when piped.
+/// The words themselves never carry styles — they must copy clean.
+fn print_recovery_phrase(phrase: &str, rotated: bool) {
+    if !crate::style::stdout_is_tty() {
+        if rotated {
+            println!("NEW RECOVERY PHRASE — the old one is now useless; write this down:");
+        } else {
+            println!("RECOVERY PHRASE — write this down; it is shown exactly once:");
+        }
+        println!("  {phrase}");
+        return;
+    }
+    for line in recovery_phrase_box(phrase, rotated) {
+        anstream::println!("{line}");
+    }
+}
+
+/// The styled lines of the ceremony box. Widths are computed in chars
+/// (every char used is single-column; `len()` would over-pad the em-dash
+/// titles). The phrase words carry no styles — they must copy clean.
+fn recovery_phrase_box(phrase: &str, rotated: bool) -> Vec<String> {
+    use crate::style::{ACCENT, ERR};
+    let title = if rotated {
+        "NEW RECOVERY PHRASE — the old phrase is now useless"
+    } else {
+        "RECOVERY PHRASE — shown exactly once"
+    };
+    let warning = [
+        "Anyone with these words can decrypt your vault.",
+        "Write them down and store them offline.",
+    ];
+    let width = |s: &str| s.chars().count();
+    let words: Vec<&str> = phrase.split_whitespace().collect();
+    let cell = words.iter().map(|w| width(w)).max().unwrap_or(8);
+    let rows: Vec<String> = words
+        .chunks(4)
+        .map(|chunk| {
+            chunk
+                .iter()
+                .map(|w| format!("{w:<cell$}"))
+                .collect::<Vec<_>>()
+                .join("  ")
+                .trim_end()
+                .to_string()
+        })
+        .collect();
+    let inner = width(title)
+        .max(warning.iter().map(|w| width(w)).max().unwrap_or(0))
+        .max(rows.iter().map(|r| width(r) + 2).max().unwrap_or(0))
+        + 4;
+    let pad = |text: &str, indent: usize| " ".repeat(inner - indent - width(text));
+    let mut out = Vec::new();
+    out.push(format!("{ACCENT}┌{}┐{ACCENT:#}", "─".repeat(inner)));
+    out.push(format!(
+        "{ACCENT}│{ACCENT:#}  {ERR}{title}{ERR:#}{}{ACCENT}│{ACCENT:#}",
+        pad(title, 2)
+    ));
+    out.push(format!("{ACCENT}│{}│{ACCENT:#}", " ".repeat(inner)));
+    for row in &rows {
+        out.push(format!(
+            "{ACCENT}│{ACCENT:#}    {row}{}{ACCENT}│{ACCENT:#}",
+            pad(row, 4)
+        ));
+    }
+    out.push(format!("{ACCENT}│{}│{ACCENT:#}", " ".repeat(inner)));
+    for line in warning {
+        out.push(format!(
+            "{ACCENT}│{ACCENT:#}  {line}{}{ACCENT}│{ACCENT:#}",
+            pad(line, 2)
+        ));
+    }
+    out.push(format!("{ACCENT}└{}┘{ACCENT:#}", "─".repeat(inner)));
+    out
+}
+
 /// `tuskd sync init` — create a repo under the logged-in account with this
 /// vault's device as its first approved device; the self-serve successor
 /// to `sync bootstrap` (D29).
@@ -379,8 +455,7 @@ pub fn init(
     store_rmk(vault, &rmk, 1)?;
     println!("repo created: {repo_id} ({repo_name})");
     println!();
-    println!("RECOVERY PHRASE — write this down; it is shown exactly once:");
-    println!("  {}", rmk.to_mnemonic().map_err(err)?);
+    print_recovery_phrase(&rmk.to_mnemonic().map_err(err)?, false);
     println!();
     crate::style::hint("next: tuskd sync push   # or just run the daemon — it syncs automatically");
     Ok(())
@@ -395,11 +470,32 @@ pub fn repos(vault: &Path) -> Result<(), CoreError> {
         return Ok(());
     }
     println!("repos of {}:", session.email);
-    for repo in repos {
-        println!(
-            "{}  gen {}  {}",
-            repo.repo_id, repo.rmk_generation, repo.name
-        );
+    if crate::style::stdout_is_tty() {
+        // Aligned table (D35); ✓ marks the repo this vault is connected to.
+        use crate::style::{DIM, OK};
+        let connected = load_config(vault).ok().map(|c| c.repo_id);
+        let id_width = repos.iter().map(|r| r.repo_id.len()).max().unwrap_or(2);
+        anstream::println!("  {DIM}{:<id_width$}  GEN  NAME{DIM:#}", "ID");
+        for repo in repos {
+            let mark = if connected.as_deref() == Some(repo.repo_id.as_str()) {
+                format!("{OK}✓{OK:#}")
+            } else {
+                " ".to_string()
+            };
+            anstream::println!(
+                "{mark} {:<id_width$}  {:<3}  {}",
+                repo.repo_id,
+                repo.rmk_generation,
+                repo.name
+            );
+        }
+    } else {
+        for repo in repos {
+            println!(
+                "{}  gen {}  {}",
+                repo.repo_id, repo.rmk_generation, repo.name
+            );
+        }
     }
     Ok(())
 }
@@ -511,10 +607,30 @@ pub fn connect(
         println!("repo key recovered from phrase and stored");
     }
     println!("enrolled as device {device_id} (pending)");
-    println!("fingerprint: {fingerprint}");
-    println!(
-        "on an approved device, run: tuskd sync approve {device_id} --fingerprint {fingerprint}"
-    );
+    if crate::style::stdout_is_tty() {
+        // The approval ceremony (D35): the fingerprint in the same gold
+        // 4-char groups the dashboard's devices screen shows, so checking
+        // it across the two surfaces is a visual diff. The copyable
+        // command below keeps the raw form.
+        use crate::style::{fingerprint_groups, ACCENT, DIM};
+        println!();
+        anstream::println!(
+            "  fingerprint   {ACCENT}{}{ACCENT:#}",
+            fingerprint_groups(&fingerprint)
+        );
+        println!();
+        println!("approve from an already-approved machine:");
+        println!("  tuskd sync approve {device_id} --fingerprint {fingerprint}");
+        anstream::println!(
+            "{DIM}or from the dashboard's devices page — approve only if the fingerprint\n\
+             there matches this screen exactly.{DIM:#}"
+        );
+    } else {
+        println!("fingerprint: {fingerprint}");
+        println!(
+            "on an approved device, run: tuskd sync approve {device_id} --fingerprint {fingerprint}"
+        );
+    }
     Ok(())
 }
 
@@ -550,10 +666,15 @@ pub fn status(vault: &Path) -> Result<(), CoreError> {
     anstream::println!("{DIM}repo:{DIM:#}    {}", config.repo_id);
     anstream::println!("{DIM}device:{DIM:#}  {}", config.device_id);
     let key = ensure_device_key(vault)?;
-    anstream::println!(
-        "{DIM}fingerprint:{DIM:#} {}",
-        tusk_sync::device_fingerprint(&key.verifying_key().to_bytes())
-    );
+    let fingerprint = tusk_sync::device_fingerprint(&key.verifying_key().to_bytes());
+    if crate::style::stdout_is_tty() {
+        anstream::println!(
+            "{DIM}fingerprint:{DIM:#} {ACCENT}{}{ACCENT:#}",
+            crate::style::fingerprint_groups(&fingerprint)
+        );
+    } else {
+        println!("fingerprint: {fingerprint}");
+    }
     let has_rmk = sync_dir(vault).join(RMK_FILE).exists();
     match cloud.fetch_wrap() {
         Ok(_) => anstream::println!(
@@ -582,12 +703,49 @@ pub fn status(vault: &Path) -> Result<(), CoreError> {
 
 /// `tuskd sync devices`.
 pub fn devices(vault: &Path) -> Result<(), CoreError> {
-    let (cloud, _) = client(vault)?;
+    let (cloud, config) = client(vault)?;
     let devices = cloud.list_devices().map_err(err)?;
+    if !crate::style::stdout_is_tty() {
+        for d in devices {
+            println!(
+                "{}  {:8}  {}  {}",
+                d.device_id, d.status, d.fingerprint, d.name
+            );
+        }
+        return Ok(());
+    }
+    // Aligned table (D35): status colored, fingerprints in the dashboard's
+    // 4-char gold groups, ✓ marking this device.
+    use crate::style::{fingerprint_groups, ACCENT, DIM, ERR, OK};
+    let id_width = devices.iter().map(|d| d.device_id.len()).max().unwrap_or(2);
+    let fp_width = devices
+        .iter()
+        .map(|d| fingerprint_groups(&d.fingerprint).len())
+        .max()
+        .unwrap_or(11);
+    anstream::println!(
+        "  {DIM}{:<id_width$}  {:<8}  {:<fp_width$}  NAME{DIM:#}",
+        "DEVICE",
+        "STATUS",
+        "FINGERPRINT"
+    );
     for d in devices {
-        println!(
-            "{}  {:8}  {}  {}",
-            d.device_id, d.status, d.fingerprint, d.name
+        let mark = if d.device_id == config.device_id {
+            format!("{OK}✓{OK:#}")
+        } else {
+            " ".to_string()
+        };
+        let status = match d.status.as_str() {
+            "approved" => format!("{OK}{:<8}{OK:#}", d.status),
+            "pending" => format!("{ACCENT}{:<8}{ACCENT:#}", d.status),
+            "revoked" => format!("{ERR}{:<8}{ERR:#}", d.status),
+            other => format!("{other:<8}"),
+        };
+        anstream::println!(
+            "{mark} {:<id_width$}  {status}  {ACCENT}{:<fp_width$}{ACCENT:#}  {}",
+            d.device_id,
+            fingerprint_groups(&d.fingerprint),
+            d.name
         );
     }
     Ok(())
@@ -691,7 +849,19 @@ pub fn push(vault: &Path) -> Result<(), CoreError> {
 /// `tuskd sync pull` — materialize the cloud view (additive; local files
 /// not in the manifest are left alone, files in it are overwritten).
 pub fn pull(vault: &Path) -> Result<(), CoreError> {
-    let written = crate::sync_worker::pull_all(vault)?;
+    // In-place progress on an interactive stderr (D35); silent when piped
+    // so stdout stays exactly "pulled N files" either way.
+    use std::io::IsTerminal;
+    let progress = std::io::stderr().is_terminal();
+    let written = crate::sync_worker::pull_all_with(vault, |done, total, rel| {
+        if progress {
+            use crate::style::DIM;
+            anstream::eprint!("\r{DIM}pulling {done}/{total} {rel:<50.50}{DIM:#}");
+        }
+    })?;
+    if progress && written > 0 {
+        anstream::eprint!("\r{:<70}\r", "");
+    }
     println!("pulled {written} files");
     Ok(())
 }
@@ -773,14 +943,53 @@ pub fn revoke(vault: &Path, device_id: &str) -> Result<(), CoreError> {
     println!("revoked {device_id}; rotated to generation {generation}");
     println!("re-wrapped the repo key for {rewrapped} remaining device(s)");
     println!();
-    println!("NEW RECOVERY PHRASE — the old one is now useless; write this down:");
-    println!("  {}", rmk_new.to_mnemonic().map_err(err)?);
+    print_recovery_phrase(&rmk_new.to_mnemonic().map_err(err)?, true);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Visible width of a styled line: chars with SGR escapes stripped.
+    fn visible_width(line: &str) -> usize {
+        let mut width = 0usize;
+        let mut in_escape = false;
+        for c in line.chars() {
+            if in_escape {
+                if c == 'm' {
+                    in_escape = false;
+                }
+            } else if c == '\u{1b}' {
+                in_escape = true;
+            } else {
+                width += 1;
+            }
+        }
+        width
+    }
+
+    #[test]
+    fn recovery_box_lines_align_and_words_copy_clean() {
+        let phrase = "abandon ability able about above absent absorb abstract absurd abuse \
+                      access accident account accuse achieve acid acoustic acquire across act \
+                      action actor actress actual";
+        for rotated in [false, true] {
+            let lines = recovery_phrase_box(phrase, rotated);
+            let widths: Vec<usize> = lines.iter().map(|l| visible_width(l)).collect();
+            assert!(
+                widths.iter().all(|w| *w == widths[0]),
+                "ragged box: {widths:?}"
+            );
+            // Every phrase word appears, unstyled: the char right before a
+            // word is a plain space, never an escape terminator.
+            let all = lines.join("\n");
+            for word in phrase.split_whitespace() {
+                let at = all.find(&format!(" {word}")).expect(word);
+                assert!(!all[..at].ends_with('\u{1b}'));
+            }
+        }
+    }
 
     #[test]
     fn junk_basenames_are_not_names() {
