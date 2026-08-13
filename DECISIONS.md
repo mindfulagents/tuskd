@@ -766,3 +766,29 @@ C16):
   code from an email that already arrived; declining ends the step
   cleanly with the resume hint instead of an error — rerunning
   `tuskd setup` lands right back on sign-in.
+## D39 — `tuskd service`: start at login, single active vault (2026-08-12)
+
+A desktop tray has no working directory, so it cannot infer a vault the way the
+CLI does. Rather than give the tray its own lifecycle logic, the machine's
+active vault becomes a first-class CLI concept:
+
+- `tuskd service install|uninstall|status|switch` writes and manages a
+  LaunchAgent (macOS) or `systemd --user` unit (Linux) with the **vault path
+  baked in**. Platform branching lives in `platform.rs` and only there
+  (build-loop §0). The tray is a thin caller — one plane, per D6.
+- **One active vault per machine.** `tuskd init` already writes
+  `http_port = 7477` into every vault, so two daemons cannot both bind the
+  dashboard port anyway; this makes the existing reality explicit. Per-vault
+  port allocation is deliberately not done.
+- State lives in `~/.config/opentusk/desktop.json` (`active_vault` + recents),
+  shared by the CLI and the tray so there is exactly one source of truth.
+- **Switching is a transaction, not a toggle.** Stop the old daemon gracefully
+  (the existing shutdown drains and waits for the vault lock), re-point the
+  unit, start the new daemon. Machine-global MCP clients (`claude-desktop`,
+  `cursor`, `codex`) hold the absolute vault path or a vault-scoped token, so
+  `switch` reports which are stale and the command to move each — it never
+  rewrites a client config behind the user's back. Project-scoped clients
+  (`claude-code`, `vscode`) need nothing.
+- **Amends D19.** `installers = []` stands and `get.opentusk.ai/install.sh`
+  remains canonical for CLI and server installs; desktop bundles are a separate
+  CI job off the same release tag, not cargo-dist installers.

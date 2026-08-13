@@ -12,6 +12,7 @@ pub mod dashboard;
 pub mod mcp_protocol;
 pub mod platform;
 pub mod runtime;
+pub mod service;
 pub mod setup;
 pub mod stdio;
 pub mod style;

@@ -3,7 +3,8 @@
 
 use crate::admin::{AdminRequest, AdminResponse};
 use crate::cli::{
-    AgentCommand, Cli, Command, IndexCommand, KeyCommand, ReviewCommand, TokenCommand,
+    AgentCommand, Cli, Command, IndexCommand, KeyCommand, ReviewCommand, ServiceCommand,
+    TokenCommand,
 };
 use crate::config;
 use crate::runtime::CoreHost;
@@ -27,6 +28,18 @@ pub fn run(cli: Cli) -> i32 {
 fn dispatch(vault: &std::path::Path, command: Command) -> Result<(), CoreError> {
     match command {
         Command::Init => init(vault),
+        Command::Service { command } => {
+            let home = crate::setup::home_dir()?;
+            match command {
+                ServiceCommand::Install { vault: v } => {
+                    let target = v.unwrap_or_else(|| vault.to_path_buf());
+                    crate::service::install(&target, &home)
+                }
+                ServiceCommand::Uninstall => crate::service::uninstall(&home),
+                ServiceCommand::Status => crate::service::status(&home),
+                ServiceCommand::Switch { vault: v } => crate::service::switch(&v, &home),
+            }
+        }
         Command::Setup => {
             use std::io::IsTerminal;
             if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
@@ -367,7 +380,7 @@ pub(crate) fn start_detached(vault: &std::path::Path) -> Result<(), CoreError> {
 
 /// `tuskd stop` (D18): graceful shutdown over the UDS admin plane, then wait
 /// for the vault lock to release so the vault is immediately reusable.
-fn stop_daemon(vault: &std::path::Path, tolerate_absent: bool) -> Result<(), CoreError> {
+pub(crate) fn stop_daemon(vault: &std::path::Path, tolerate_absent: bool) -> Result<(), CoreError> {
     let cfg = config::load(vault)?;
     if UnixStream::connect(&cfg.uds_path).is_err() {
         if tolerate_absent {
