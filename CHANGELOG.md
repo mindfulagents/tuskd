@@ -5,7 +5,7 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
-## Unreleased
+## v0.9.0 — 2026-08-13
 
 - **`tuskd service` — start at login, and one active vault per machine (D39):**
   `service install` writes a LaunchAgent (macOS) or `systemd --user` unit
@@ -22,6 +22,18 @@ version bump.
   vault, so they are left alone. The active vault lives in
   `~/.config/opentusk/desktop.json`, shared with the desktop tray so there is
   one source of truth.
+- **A rate-limited sign-in is no longer a dead end (D38):** hitting the
+  server's send limit for sign-in codes used to end `tuskd setup` on the
+  spot with "wait a bit" — no wait time, no way forward, mid-onboarding.
+  Two things made that exit needless: a code already in your inbox stays
+  valid for 10 minutes regardless of the send limit, and
+  `sync login --code` verifies without requesting a new send at all.
+  Now `sync login`
+  reports a concrete wait when the server supplies one ("wait about 9
+  minutes") and the wizard offers to take a code from the email that
+  already arrived; declining ends the step cleanly with the resume hint,
+  so rerunning `tuskd setup` lands straight back on sign-in. Client-side
+  only — the server's limits are unchanged.
 
 ## v0.8.0 — 2026-07-31
 
