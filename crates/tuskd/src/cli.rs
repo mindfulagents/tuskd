@@ -44,6 +44,11 @@ pub enum Command {
         #[arg(long)]
         agent: String,
     },
+    /// Manage the start-at-login service and the machine's active vault
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommand,
+    },
     /// Manage agent identities and grants
     Agent {
         #[command(subcommand)]
@@ -257,4 +262,23 @@ pub enum SyncCommand {
     Push,
     /// Download and materialize the vault snapshot
     Pull,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ServiceCommand {
+    /// Install the login service for a vault (start tuskd at login)
+    Install {
+        /// Vault to manage (defaults to --vault / $OPENTUSK_VAULT / ./vault)
+        #[arg(long)]
+        vault: Option<std::path::PathBuf>,
+    },
+    /// Remove the login service. The vault and its data are untouched
+    Uninstall,
+    /// Show the active vault and whether the login service is installed
+    Status,
+    /// Point the machine at a different vault (stops the old daemon first)
+    Switch {
+        /// Vault to switch to
+        vault: std::path::PathBuf,
+    },
 }

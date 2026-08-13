@@ -5,6 +5,24 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## Unreleased
+
+- **`tuskd service` — start at login, and one active vault per machine (D39):**
+  `service install` writes a LaunchAgent (macOS) or `systemd --user` unit
+  (Linux) with the vault path baked in, because a daemon started at login
+  has no working directory to infer it from. `service status` prints the
+  active vault first and always. `service switch <vault>` moves the machine
+  to another vault: it stops the outgoing daemon gracefully so an in-flight
+  sync drains, re-points the login unit, starts the new one, and then
+  **names the machine-global MCP clients that still point at the old vault**
+  (`claude-desktop`, `cursor`, `codex` — they hold either the absolute vault
+  path or a vault-scoped token) with the exact command to move each and the
+  restart each one needs. It never rewrites a client config silently.
+  `claude-code` and `vscode` are project-scoped and travel with their own
+  vault, so they are left alone. The active vault lives in
+  `~/.config/opentusk/desktop.json`, shared with the desktop tray so there is
+  one source of truth.
+
 ## v0.8.0 — 2026-07-31
 
 - **`tuskd setup` — guided onboarding (D36):** one command that walks

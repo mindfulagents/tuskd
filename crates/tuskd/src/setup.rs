@@ -644,10 +644,26 @@ fn absolute(path: &Path) -> Result<String, CoreError> {
     Ok(abs.display().to_string())
 }
 
-fn home_dir() -> Result<PathBuf, CoreError> {
+pub(crate) fn home_dir() -> Result<PathBuf, CoreError> {
     std::env::var("HOME")
         .ok()
         .filter(|h| !h.is_empty())
         .map(PathBuf::from)
         .ok_or_else(|| CoreError::Other("$HOME is not set".into()))
+}
+
+/// Machine-global MCP clients that currently have a tusk entry configured.
+///
+/// These hold either the absolute vault path (stdio clients) or a
+/// vault-scoped agent token (http clients), so a vault switch leaves them
+/// pointing at the old vault until they are re-pointed. `claude-code` and
+/// `vscode` are project-scoped and travel with their own vault, so they are
+/// deliberately excluded. Returns `(client name, next step after re-pointing)`.
+pub(crate) fn global_clients_configured(home: &Path) -> Vec<(&'static str, &'static str)> {
+    const GLOBAL: [Client; 3] = [Client::ClaudeDesktop, Client::Cursor, Client::Codex];
+    GLOBAL
+        .into_iter()
+        .filter(|c| read_entry_present(*c, &c.config_path(home)) == Some(true))
+        .map(|c| (c.name(), c.next_step()))
+        .collect()
 }

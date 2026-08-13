@@ -154,3 +154,157 @@ impl VaultLock {
         &self.path
     }
 }
+
+// ── Start-at-login service (DECISIONS D39) ───────────────────────────
+//
+// Platform branching for the login service lives here and only here
+// (build-loop §0). macOS gets a LaunchAgent, Linux a systemd --user unit.
+
+/// Reverse-DNS label / unit name shared by both platforms.
+pub const SERVICE_LABEL: &str = "ai.opentusk.tuskd";
+
+/// Where the login-service definition lives for this platform.
+pub fn service_unit_path(home: &Path) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        home.join("Library/LaunchAgents")
+            .join(format!("{SERVICE_LABEL}.plist"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        home.join(".config/systemd/user/tuskd.service")
+    }
+}
+
+/// The unit/plist body. The vault path is baked in: the daemon started at
+/// login has no working directory to infer it from.
+pub fn service_unit_contents(exe: &Path, vault: &Path) -> String {
+    let exe = exe.display();
+    let vault = vault.display();
+    #[cfg(target_os = "macos")]
+    {
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>{SERVICE_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{exe}</string>
+    <string>--vault</string>
+    <string>{vault}</string>
+    <string>start</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>{vault}/.tusk/daemon.log</string>
+  <key>StandardErrorPath</key><string>{vault}/.tusk/daemon.log</string>
+</dict>
+</plist>
+"#
+        )
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        format!(
+            "[Unit]\n\
+             Description=tuskd (OpenTusk daemon)\n\
+             After=default.target\n\n\
+             [Service]\n\
+             Type=simple\n\
+             ExecStart={exe} --vault {vault} start\n\
+             Restart=on-failure\n\
+             StandardOutput=append:{vault}/.tusk/daemon.log\n\
+             StandardError=append:{vault}/.tusk/daemon.log\n\n\
+             [Install]\n\
+             WantedBy=default.target\n"
+        )
+    }
+}
+
+/// Register the unit with the platform's session manager.
+pub fn service_load(unit: &Path) -> Result<(), CoreError> {
+    #[cfg(target_os = "macos")]
+    {
+        let target = format!("gui/{}", current_uid()?);
+        run_tool(
+            "launchctl",
+            &["bootstrap", &target, &unit.display().to_string()],
+        )
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = unit;
+        run_tool("systemctl", &["--user", "daemon-reload"])?;
+        run_tool("systemctl", &["--user", "enable", "--now", "tuskd.service"])
+    }
+}
+
+/// Unregister it. Absent units are not an error — uninstall is idempotent.
+pub fn service_unload(unit: &Path) -> Result<(), CoreError> {
+    #[cfg(target_os = "macos")]
+    {
+        let target = format!("gui/{}/{SERVICE_LABEL}", current_uid()?);
+        let _ = run_tool("launchctl", &["bootout", &target]);
+        let _ = unit;
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = unit;
+        let _ = run_tool(
+            "systemctl",
+            &["--user", "disable", "--now", "tuskd.service"],
+        );
+        let _ = run_tool("systemctl", &["--user", "daemon-reload"]);
+        Ok(())
+    }
+}
+
+/// Human-readable hint naming the session manager, for `service status`.
+pub fn service_manager_name() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "launchd"
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "systemd --user"
+    }
+}
+
+/// Current uid via `id -u`. The crate is `#![forbid(unsafe_code)]`, so no libc.
+#[cfg(target_os = "macos")]
+fn current_uid() -> Result<String, CoreError> {
+    let out = std::process::Command::new("id")
+        .arg("-u")
+        .output()
+        .map_err(|e| CoreError::io("id".to_string(), e))?;
+    if !out.status.success() {
+        return Err(CoreError::Other(
+            "could not determine uid via `id -u`".into(),
+        ));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn run_tool(bin: &str, args: &[&str]) -> Result<(), CoreError> {
+    let out = std::process::Command::new(bin)
+        .args(args)
+        .output()
+        .map_err(|e| CoreError::io(bin.to_string(), e))?;
+    if out.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    Err(CoreError::Other(format!(
+        "{bin} {} failed: {}",
+        args.join(" "),
+        if stderr.is_empty() {
+            out.status.to_string()
+        } else {
+            stderr
+        }
+    )))
+}
