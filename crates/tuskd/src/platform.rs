@@ -6,6 +6,7 @@ use sha2::digest::Digest;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use tusk_core::error::CoreError;
 
 /// Default Unix-domain-socket path for a vault. `sun_path` is ~104 bytes on
@@ -143,16 +144,82 @@ impl VaultLock {
             .write(true)
             .open(&path)
             .map_err(|e| CoreError::io(path.display().to_string(), e))?;
-        file.try_lock_exclusive()
-            .map_err(|_| CoreError::Locked(path.display().to_string()))?;
+        if file.try_lock_exclusive().is_err() {
+            // Name the holder (D40): "locked" alone sends people hunting
+            // with lsof; the pid is right there in the file.
+            let detail = match describe_lock_holder(vault) {
+                Some(holder) => format!("{} — held by {holder}", path.display()),
+                None => path.display().to_string(),
+            };
+            return Err(CoreError::Locked(detail));
+        }
         let _ = file.set_len(0);
         let _ = writeln!(file, "{}", std::process::id());
         Ok(VaultLock { _file: file, path })
     }
 
+    /// Acquire, and if another process has the vault, ask it to yield
+    /// (D40): leave a handoff request and keep trying for `wait`. Embedded
+    /// `tuskd mcp` sessions watch for the request and release the lock;
+    /// anything else (an export, a stuck process) simply lets the wait run
+    /// out, and the error names it.
+    pub fn acquire_or_request(vault: &Path, wait: Duration) -> Result<VaultLock, CoreError> {
+        let first = match VaultLock::acquire(vault) {
+            Err(CoreError::Locked(detail)) => detail,
+            other => return other,
+        };
+        let request = handoff_request_path(vault);
+        if std::fs::write(&request, format!("{}\n", std::process::id())).is_err() {
+            return Err(CoreError::Locked(first));
+        }
+        let deadline = Instant::now() + wait;
+        let result = loop {
+            std::thread::sleep(Duration::from_millis(100));
+            match VaultLock::acquire(vault) {
+                Err(CoreError::Locked(detail)) if Instant::now() < deadline => {
+                    let _ = detail;
+                }
+                other => break other,
+            }
+        };
+        // Whoever yielded is watching this file to learn the outcome:
+        // gone + lock free means "the borrower finished, take it back".
+        let _ = std::fs::remove_file(&request);
+        result
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
+}
+
+/// D40: where a process that wants the vault asks the current holder to
+/// yield. Contents are the requester's pid (informational).
+pub fn handoff_request_path(vault: &Path) -> PathBuf {
+    vault.join(".tusk").join("handoff")
+}
+
+/// Pid recorded in `.tusk/lock` by the process holding it.
+pub fn lock_holder_pid(vault: &Path) -> Option<u32> {
+    let raw = std::fs::read_to_string(vault.join(".tusk").join("lock")).ok()?;
+    raw.split_whitespace().next()?.parse().ok()
+}
+
+/// "pid 17378 (tuskd --vault … mcp --agent claude-desktop)" for the process
+/// holding the vault lock, as far as the platform can tell.
+pub fn describe_lock_holder(vault: &Path) -> Option<String> {
+    let pid = lock_holder_pid(vault)?;
+    let cmd = std::process::Command::new("ps")
+        .args(["-o", "command=", "-p", &pid.to_string()])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty());
+    Some(match cmd {
+        Some(cmd) => format!("pid {pid} ({cmd})"),
+        None => format!("pid {pid}"),
+    })
 }
 
 // ── Start-at-login service (DECISIONS D39) ───────────────────────────

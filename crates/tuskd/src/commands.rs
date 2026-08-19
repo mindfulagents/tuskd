@@ -391,6 +391,7 @@ pub(crate) fn stop_daemon(vault: &std::path::Path, tolerate_absent: bool) -> Res
             "no daemon is running for this vault".into(),
         ));
     }
+    let daemon_pid = crate::platform::lock_holder_pid(vault);
     match admin_route(vault, &AdminRequest::Shutdown) {
         Ok(_) => {}
         // Pre-D18 daemons don't know the shutdown verb; their admin parser
@@ -423,6 +424,10 @@ pub(crate) fn stop_daemon(vault: &std::path::Path, tolerate_absent: bool) -> Res
                 drop(lock);
                 break;
             }
+            // A client session that was proxying through us may already
+            // have taken the vault over in embedded mode (D40); a new pid
+            // in the lock file means the daemon is gone.
+            Err(_) if crate::platform::lock_holder_pid(vault) != daemon_pid => break,
             Err(_) if std::time::Instant::now() <= deadline => {
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
@@ -571,7 +576,9 @@ pub(crate) fn admin_route(vault: &std::path::Path, req: &AdminRequest) -> Result
     if let Ok(stream) = UnixStream::connect(&cfg.uds_path) {
         return admin_over_uds(stream, req);
     }
-    let host = CoreHost::open(&cfg, false)?;
+    // One-shot: borrow the vault from an embedded session if one has it
+    // (D40) — `tuskd status` must not fail just because a client is open.
+    let host = CoreHost::open_or_request(&cfg, false, std::time::Duration::from_secs(5))?;
     let resp = crate::admin::execute(&host.ctx, &cfg.graduation, req, false);
     host.shutdown();
     resp.into_result()

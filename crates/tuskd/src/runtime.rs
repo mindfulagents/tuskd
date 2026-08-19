@@ -21,6 +21,27 @@ impl CoreHost {
     /// the index (D10), and optionally start the watcher.
     pub fn open(config: &Config, with_watcher: bool) -> Result<CoreHost, CoreError> {
         let lock = VaultLock::acquire(&config.vault)?;
+        Self::open_locked(config, with_watcher, lock)
+    }
+
+    /// Like [`open`](Self::open), but if an embedded `tuskd mcp` session
+    /// holds the vault, ask it to yield and wait up to `wait` (D40). For
+    /// the daemon and one-shot admin commands — never for another embedded
+    /// session, which would just trade the lock back and forth.
+    pub fn open_or_request(
+        config: &Config,
+        with_watcher: bool,
+        wait: std::time::Duration,
+    ) -> Result<CoreHost, CoreError> {
+        let lock = VaultLock::acquire_or_request(&config.vault, wait)?;
+        Self::open_locked(config, with_watcher, lock)
+    }
+
+    fn open_locked(
+        config: &Config,
+        with_watcher: bool,
+        lock: VaultLock,
+    ) -> Result<CoreHost, CoreError> {
         let ctx = Arc::new(TuskContext::open_with(
             &config.vault,
             Arc::new(SystemClock),

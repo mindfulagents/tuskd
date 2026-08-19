@@ -5,6 +5,20 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## v0.9.1 — 2026-08-19
+
+- **A client's MCP session can no longer pin the vault (D40):** `tuskd mcp`
+  sessions that went embedded (started while no daemon was running — e.g.
+  Claude Desktop respawning its server right after `tuskd stop`) held
+  `.tusk/lock` for the life of the client, and `tuskd start` — even
+  `tuskd status` — failed with "vault is locked by another process" until
+  the client was quit. Now the daemon (and one-shot commands) ask the
+  session to yield; it releases the vault and re-attaches to the daemon as
+  a proxy without the client noticing. The reverse holds too: a proxied
+  session whose daemon stops goes embedded instead of dying, and requests
+  the daemon never answered are replayed. The lock error now names the
+  holder: `held by pid 17378 (tuskd … mcp --agent claude-desktop)`.
+
 ## v0.9.0 — 2026-08-13
 
 - **`tuskd service` — start at login, and one active vault per machine (D39):**
