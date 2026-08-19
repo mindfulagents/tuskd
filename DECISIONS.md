@@ -792,3 +792,52 @@ active vault becomes a first-class CLI concept:
 - **Amends D19.** `installers = []` stands and `get.opentusk.ai/install.sh`
   remains canonical for CLI and server installs; desktop bundles are a separate
   CI job off the same release tag, not cargo-dist installers.
+
+## D40 — embedded MCP sessions yield the vault; one stdio session, two servers (2026-08-19)
+
+Reported from the desktop tray: a user clicked Stop, and from then on
+`tuskd start` — and even `tuskd status` — failed with "vault is locked by
+another process" until they quit Claude Desktop. The mechanism: the
+client's `tuskd mcp` process proxied through the daemon; when the daemon
+went away the proxy exited, the client respawned it, and with no daemon
+to proxy to it went **embedded** and took `.tusk/lock` for the life of the
+client. Spec §2.1's embedded fallback is right for zero-setup solo use,
+but the lock had no handoff path, so an idle chat window could keep the
+daemon from ever coming back.
+
+The fix keeps every external contract (CLI verbs, MCP tools, `.tusk/`
+layout) and makes the two modes of `tuskd mcp` a live state instead of a
+launch-time choice:
+
+- **Requesting the vault.** `VaultLock::acquire_or_request` tries the
+  lock; if held, it writes `.tusk/handoff` (requester pid) and keeps trying
+  for a bounded wait (daemon: 5s inside the 10s `start -d` budget; one-shot
+  admin commands: 5s), then removes the request. Only the daemon and admin
+  one-shots request; a second embedded `mcp` session never does, so two
+  clients can't trade the lock back and forth — it fails fast as before.
+- **Yielding.** An embedded session checks for `.tusk/handoff` between
+  messages (never mid-request; 250ms poll when idle) and releases the core.
+  It then watches: the daemon's socket appears → it re-attaches as a
+  **proxy** (the client's MCP session continues unchanged; `McpSession` is
+  stateless so `initialize` needs no replay); the request is gone and the
+  lock is free → a one-shot borrower finished, it **re-embeds**; nobody
+  takes the vault within 5s → the request was stale (a requester that
+  died), it deletes it and re-embeds. Lines that arrive while yielded
+  queue on the stdin channel and are served afterwards.
+- **The other direction.** A proxy whose daemon hangs up no longer exits:
+  it waits for the daemon's lock to clear and goes embedded, so `tuskd
+  stop`/`restart`/`service switch` never kill the client's MCP server.
+  Requests written to a dying daemon that it never answered (tracked by
+  JSON-RPC id) are **replayed** to the next server instead of vanishing.
+  `tuskd stop`'s "wait for the lock to release" accepts a *new pid* in the
+  lock file as proof the daemon is gone, since a session may take the vault
+  the instant the daemon lets go.
+- **Naming the holder.** `CoreError::Locked` now reads
+  `… .tusk/lock — held by pid 17378 (tuskd --vault … mcp --agent
+  claude-desktop)`, from the pid in the lock file plus `ps` (platform.rs).
+  The "vault is locked by another process" prefix is stable; the tray
+  matches on it.
+
+Tests: `crates/tuskd/tests/d40_handoff.rs` drives the real binary through
+daemon-takes-over, one-shot-borrows, second-session-refuses-and-names-holder,
+stale-request, and daemon-stops-under-a-proxy-and-comes-back.

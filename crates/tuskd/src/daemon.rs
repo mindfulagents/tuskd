@@ -24,8 +24,15 @@ struct AppState {
     config: Arc<Config>,
 }
 
+/// How long the daemon waits for an embedded session to yield the vault.
+/// Sessions check every 250ms; `start -d` allows 10s for the whole boot.
+const HANDOFF_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 pub fn run(config: Config) -> Result<(), CoreError> {
-    let host = CoreHost::open(&config, true)?;
+    // An embedded MCP session may own the vault (a client launched while no
+    // daemon ran). Ask it to hand over rather than failing (D40); it
+    // re-attaches to us as a proxy once we are listening.
+    let host = CoreHost::open_or_request(&config, true, HANDOFF_WAIT)?;
     let ctx = Arc::clone(&host.ctx);
     let config = Arc::new(config);
 
