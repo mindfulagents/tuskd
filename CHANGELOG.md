@@ -5,7 +5,7 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
-## Unreleased
+## v0.9.1 — 2026-08-19
 
 - **A client's MCP session can no longer pin the vault (D40):** `tuskd mcp`
   sessions that went embedded (started while no daemon was running — e.g.
