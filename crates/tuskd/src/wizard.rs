@@ -212,7 +212,7 @@ fn cloud(vault: &Path, prompt: &mut dyn Prompt) -> Result<(), CoreError> {
         return repair_connection(vault, prompt);
     }
     if !prompt.confirm(
-        "sync this vault to OpenTusk Cloud? (end-to-end encrypted; free plan: 1 repo)",
+        "sync this vault to OpenTusk Cloud? (end-to-end encrypted)",
         false,
     )? {
         crate::style::hint("  staying local-only — rerun tuskd setup any time to enable sync");

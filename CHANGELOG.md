@@ -5,6 +5,17 @@ becomes the GitHub Release body via cargo-dist and is announced to the team's
 release-notes channel (DECISIONS D20). Update this file in the same PR as the
 version bump.
 
+## v0.9.2 — 2026-09-21
+
+- **Free accounts sync up to 10 vaults (D41):** OpenTusk Cloud raised its
+  repo caps — free 1 → 10, Pro 10 → 50 (tusk-cloud C17). The change is
+  server-side, so every tuskd version gets it; this release only stops
+  `tuskd setup` from quoting the old "free plan: 1 repo" in its sync
+  prompt. The prompt no longer names a number at all — the server is the
+  authority, and when a cap is reached the wizard still offers the same
+  choices (join an existing repo, or free a slot with
+  `tuskd sync delete-repo`).
+
 ## v0.9.1 — 2026-08-19
 
 - **A client's MCP session can no longer pin the vault (D40):** `tuskd mcp`
