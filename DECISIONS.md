@@ -841,3 +841,18 @@ launch-time choice:
 Tests: `crates/tuskd/tests/d40_handoff.rs` drives the real binary through
 daemon-takes-over, one-shot-borrows, second-session-refuses-and-names-holder,
 stale-request, and daemon-stops-under-a-proxy-and-comes-back.
+
+## D41 — setup wizard stops quoting the free repo cap (2026-09-21)
+
+tusk-cloud C17 raised the plan repo caps (free 1 → 10, pro 10 → 50). The
+only place this client knew the number was the setup wizard's sync
+prompt — "free plan: 1 repo" — which turned a one-constant server change
+into a two-repo change and would have left every shipped client quoting
+a stale cap. The prompt now names no number. The server is the authority
+on caps; the client's job is to handle the refusal well, which it
+already does: a 403 on `POST /v1/repos` still surfaces as "repo limit
+reached for your plan" and the wizard's plan-cap menu (join an existing
+repo / stop and free a slot with `sync delete-repo`, D31) is unchanged
+and correct at whatever the cap is. If the number is ever worth showing
+again, read `max_repos` from `/v1/account/usage` rather than hardcoding
+it. No external contract changes.
