@@ -387,3 +387,39 @@ fn author_activity_counts_and_orders() {
     assert_eq!(activity[1].valid, 0);
     assert!(activity[1].last_created > activity[0].last_created);
 }
+
+/// A scope's *first* record creates its directory and the file in one go.
+/// Per-directory watchers (inotify) register the new directory only after its
+/// create event, so the write that lands in between is never reported on its
+/// own — the record must still be picked up by rescanning the directory.
+#[test]
+fn watcher_indexes_first_record_in_a_new_scope_dir() {
+    let (_dir, vault, indexer, _clock) = setup();
+    indexer.rebuild(&vault).unwrap();
+    let watcher = tusk_core::watch::VaultWatcher::start(
+        Arc::clone(&vault),
+        Arc::clone(&indexer),
+        std::time::Duration::from_millis(50),
+    )
+    .unwrap();
+
+    // A scope with no directory on disk yet.
+    let scope = Scope::parse("project:brand-new-scope").unwrap();
+    assert!(!vault.memory_dir().join(scope.rel_path()).exists());
+    vault
+        .write(&vault.new_record(RecordType::Semantic, scope, "a1", "ocelot dugong markhor"))
+        .unwrap();
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        if !indexer.search(&q("ocelot")).unwrap().is_empty() {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "first record in a new scope dir not searchable within 2s"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    watcher.stop();
+}

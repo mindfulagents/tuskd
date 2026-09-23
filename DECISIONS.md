@@ -841,3 +841,33 @@ launch-time choice:
 Tests: `crates/tuskd/tests/d40_handoff.rs` drives the real binary through
 daemon-takes-over, one-shot-borrows, second-session-refuses-and-names-holder,
 stale-request, and daemon-stops-under-a-proxy-and-comes-back.
+
+## D41 — the watcher rescans created directories (2026-09-23)
+
+Found building the repo on Linux for the first time:
+`watcher_picks_up_new_and_deleted_files` failed deterministically, and the
+live daemon reproduced it — a memory written into a scope that had no
+directory yet never became searchable.
+
+The mechanism is the difference between the two watch backends `notify`
+picks for us. FSEvents (macOS, where this repo develops) reports a whole
+subtree, so every write under `vault/memory/` arrives no matter how new its
+directory is. inotify (Linux) subscribes per directory and can only watch a
+new one *after* it sees its create event. `VaultStore::write_file` does
+`create_dir_all` → write temp → rename, all within microseconds, so a
+scope's first record lands before the watch on its directory exists and is
+reported only as the directory's create event. The record stayed invisible
+until another write in that directory or an `index rebuild` — and a scope's
+first memory is exactly the one an agent writes and then expects to find.
+
+The fix stays platform-neutral (§0: no platform-specific code outside
+`platform.rs`): a pending path that is a directory now expands to the
+records beneath it before refreshing, so the directory event carries its
+contents in. On FSEvents the file events still arrive and `refresh_path` is
+idempotent, so the cost there is one `read_dir` per created directory. The
+walk matches `VaultStore::walk`'s idiom, skipping dot-files and dot-dirs, and
+adds no dependency.
+
+Tests: `watcher_indexes_first_record_in_a_new_scope_dir` in
+`crates/tusk-core/tests/p2_indexer.rs` asserts the scope directory is absent
+before the write, so it pins this race rather than a generic one.
